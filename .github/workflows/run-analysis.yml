@@ -91,16 +91,17 @@ jobs:
           remotes::install_github(
             "powellgenomicslab/scPred",
             dependencies=TRUE,
-            upgrade="never"
+            upgrade="never",
+            auth_token=NULL
           )
           '
 
       - name: Install scAnnoX
         run: |
-          if [ -f external/scAnnoX/DESCRIPTION ]; then
+          if [ -f files/external/scAnnoX/DESCRIPTION ]; then
             Rscript -e '
             remotes::install_local(
-              "external/scAnnoX",
+              "files/external/scAnnoX",
               dependencies=TRUE,
               upgrade="never"
             )
