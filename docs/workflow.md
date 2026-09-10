@@ -1,113 +1,66 @@
-# Analysis workflow
+# Workflow
 
-## Overview
+## 1. Public data
 
-The analysis follows a standard single-cell RNA-seq workflow.
+GSE145410 is downloaded from GEO as the supplementary 10X matrix archive.
 
-```text
-Raw counts
-    |
-    v
-Quality control
-    |
-    v
-Cell filtering
-    |
-    v
-Normalization
-    |
-    v
-Highly variable genes
-    |
-    v
-Scaling
-    |
-    v
-PCA
-    |
-    v
-Integration
-    |
-    v
-Nearest-neighbor graph
-    |
-    v
-Clustering
-    |
-    v
-UMAP
-    |
-    v
-Cell annotation
-    |
-    v
-Differential expression
-    |
-    v
-Biological interpretation
+## 2. Import
 
-Quality control
-```
+Each GEO sample is converted into a Seurat object and receives explicit metadata:
 
-Cells are filtered according to:
+- sample
+- treatment
+- replicate
 
-Number of detected genes
-Total RNA counts
-Mitochondrial RNA percentage
+## 3. Quality control
 
-Example thresholds:
-```text
-nFeature_RNA > 300
-nFeature_RNA < 2500
-percent.mt < 10
-```
-These thresholds are dataset-dependent.
+QC is adaptive rather than based on fixed thresholds.
 
-Normalization
+For each sample, `scuttle::isOutlier()` is applied to:
 
-Expression counts are normalized using Seurat's
-LogNormalize method.
+- `nCount_RNA`: lower outliers, log-transformed
+- `nFeature_RNA`: lower outliers, log-transformed
+- `percent.mt`: upper outliers
 
-Highly variable genes are identified using the variance-stabilizing
-transformation (vst).
+The sample identifier is passed as the `batch` argument so that QC thresholds are calculated independently for each sample.
 
-Dimensionality reduction
+This follows the MAD-based outlier strategy used in the original workflow.
 
-PCA is performed using the selected highly variable genes.
+## 4. Normalization
 
-The first 30 principal components are used for downstream
-neighborhood analysis and UMAP.
+Seurat LogNormalize is used with a scale factor of 10,000.
 
-Integration
+The top 2,000 variable features are selected with the `vst` method.
 
-For multi-sample analysis, Seurat v5 integration is performed using
-CCA integration.
+## 5. PCA and clustering
 
-The integrated representation is then used for:
+PCA is performed using the variable features.
 
-Neighbor detection
-Clustering
-UMAP
-Annotation
+The first 30 PCs are used for nearest-neighbor graph construction, clustering and UMAP.
 
-Cell identities can be assigned using:
+## 6. Integration
 
-Marker gene expression
-SingleR
-scPred
-ACTINN
+Seurat v5 CCA integration is performed across the eight samples.
 
-Using several methods allows comparison of annotation consistency.
+The integrated representation is used for clustering and UMAP.
 
-Differential expression
+## 7. Annotation
 
-Differentially expressed genes are identified between cell
-populations or experimental groups.
+Three annotation approaches are compared:
 
-The analysis can be adapted to:
+1. SingleR
+2. scPred
+3. scAnnoX
 
-Cell type
-Treatment
-Time point
-Biological response
-Patient groups
+No ACTINN workflow is included.
+
+## 8. Differential expression
+
+Differential expression is performed after joining the RNA layers.
+
+The analysis includes:
+
+- cluster markers
+- treatment comparisons
+
+The treatment comparison is exploratory because GSE145410 contains ex-vivo treatment replicates from a single AML patient rather than an independent patient cohort.
