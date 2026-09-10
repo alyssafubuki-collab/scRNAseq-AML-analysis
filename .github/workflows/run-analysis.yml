@@ -85,11 +85,21 @@ jobs:
           )
           '
 
+      - name: Download scPred
+        run: |
+          curl -L \
+            --fail \
+            --retry 3 \
+            -H "Authorization:" \
+            -H "X-GitHub-Api-Version:" \
+            "https://github.com/powellgenomicslab/scPred/archive/refs/heads/master.tar.gz" \
+            -o scPred.tar.gz
+
       - name: Install scPred
         run: |
           Rscript -e '
-          remotes::install_url(
-            "https://github.com/powellgenomicslab/scPred/archive/refs/heads/master.tar.gz",
+          remotes::install_local(
+            "scPred.tar.gz",
             dependencies=TRUE,
             upgrade="never"
           )
