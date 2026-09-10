@@ -1,32 +1,27 @@
 # ============================================================
 # plotting_functions.R
-# Reusable visualization functions
 # ============================================================
 
-plot_qc_metrics <- function(
-    seurat_object
-) {
+plot_qc <- function(object) {
 
-  VlnPlot(
-    seurat_object,
+  Seurat::VlnPlot(
+    object,
     features = c(
       "nFeature_RNA",
       "nCount_RNA",
       "percent.mt"
     ),
+    group.by = "sample",
     ncol = 3,
-    pt.size = 0.1
+    pt.size = 0.05
   )
 }
 
 
-plot_clusters <- function(
-    seurat_object,
-    reduction = "umap"
-) {
+plot_umap_clusters <- function(object, reduction = "umap") {
 
-  DimPlot(
-    seurat_object,
+  Seurat::DimPlot(
+    object,
     reduction = reduction,
     group.by = "seurat_clusters",
     label = TRUE,
@@ -35,47 +30,15 @@ plot_clusters <- function(
 }
 
 
-plot_sample_distribution <- function(
-    seurat_object,
+plot_umap_group <- function(
+    object,
+    group,
     reduction = "umap"
 ) {
 
-  if (!"sample" %in% colnames(seurat_object@meta.data)) {
-
-    stop(
-      "The Seurat object does not contain a 'sample' metadata column."
-    )
-
-  }
-
-  DimPlot(
-    seurat_object,
+  Seurat::DimPlot(
+    object,
     reduction = reduction,
-    group.by = "sample"
+    group.by = group
   )
-}
-
-
-plot_marker_genes <- function(
-    seurat_object,
-    genes
-) {
-
-  genes <- genes[
-    genes %in% rownames(seurat_object)
-  ]
-
-  if (length(genes) == 0) {
-
-    stop(
-      "None of the requested genes are present in the dataset."
-    )
-
-  }
-
-  DotPlot(
-    seurat_object,
-    features = genes
-  ) +
-    RotatedAxis()
 }
