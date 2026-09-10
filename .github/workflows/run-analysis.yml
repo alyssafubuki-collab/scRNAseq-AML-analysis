@@ -227,20 +227,18 @@ jobs:
       # ============================================================
       # 9. INSTALL scAnnoX
       #
-      # According to the repository structure:
+      # scAnnoX is stored in:
       #
-      # external/scAnnoX/DESCRIPTION
-      #
-      # NOT files/external/scAnnoX/
+      # files/external/scAnnoX/
       # ============================================================
 
       - name: Install scAnnoX
         run: |
-          if [ -f external/scAnnoX/DESCRIPTION ]; then
+          if [ -f files/external/scAnnoX/DESCRIPTION ]; then
 
             Rscript -e '
             remotes::install_local(
-              "external/scAnnoX",
+              "files/external/scAnnoX",
               dependencies=TRUE,
               upgrade="never"
             )
@@ -250,13 +248,13 @@ jobs:
 
             echo "scAnnoX directory not found."
             echo "Expected:"
-            echo "external/scAnnoX/DESCRIPTION"
+            echo "files/external/scAnnoX/DESCRIPTION"
             echo ""
             echo "Repository contents:"
             ls -la
             echo ""
-            echo "external directory:"
-            ls -la external 2>/dev/null || true
+            echo "files/external directory:"
+            ls -la files/external 2>/dev/null || true
 
             exit 1
 
