@@ -139,9 +139,18 @@ jobs:
           )
           '
 
-      # ============================================================
+       # ============================================================
       # 7b. INSTALL COMPATIBLE HARMONY VERSION
       # ============================================================
+
+      - name: Install Harmony dependencies
+        run: |
+          Rscript -e '
+          install.packages(
+            "RhpcBLASctl",
+            repos="https://cloud.r-project.org"
+          )
+          '
 
       - name: Install Harmony 1.2.4
         run: |
