@@ -14,9 +14,10 @@ data/
     ├── barcodes.tsv.gz
     ├── features.tsv.gz
     └── matrix.mtx.gz
-```text
+```
 
 For multi-sample integration:
+
 ```text
 
 data/
@@ -30,7 +31,7 @@ data/
         ├── barcodes.tsv.gz
         ├── features.tsv.gz
         └── matrix.mtx.gz
-```text
+```
 
 The datasets used for demonstration should be publicly available and
 properly cited in the repository documentation.
