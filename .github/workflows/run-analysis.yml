@@ -226,39 +226,33 @@ jobs:
           
       # ============================================================
       # 9. INSTALL scAnnoX
-      #
-      # scAnnoX is stored in:
-      #
-      # files/external/scAnnoX/
       # ============================================================
 
       - name: Install scAnnoX
         run: |
-          if [ -f files/external/scAnnoX/DESCRIPTION ]; then
+          echo "Checking scAnnoX source..."
+          ls -la files/external/scAnnoX
+          echo ""
+          echo "DESCRIPTION:"
+          cat files/external/scAnnoX/DESCRIPTION
+          echo ""
 
-            Rscript -e '
-            remotes::install_local(
-              "files/external/scAnnoX",
-              dependencies=TRUE,
-              upgrade="never"
-            )
-            '
+          Rscript -e '
+          options(
+            repos = c(CRAN = "https://cloud.r-project.org")
+          )
 
-          else
+          cat("Installing local scAnnoX package...\n")
 
-            echo "scAnnoX directory not found."
-            echo "Expected:"
-            echo "files/external/scAnnoX/DESCRIPTION"
-            echo ""
-            echo "Repository contents:"
-            ls -la
-            echo ""
-            echo "files/external directory:"
-            ls -la files/external 2>/dev/null || true
+          remotes::install_local(
+            "files/external/scAnnoX",
+            dependencies = TRUE,
+            upgrade = "never",
+            force = TRUE
+          )
 
-            exit 1
-
-          fi
+          cat("Installation command completed.\n")
+          '
 
       # ============================================================
       # 10. TEST scAnnoX
@@ -267,15 +261,26 @@ jobs:
       - name: Test scAnnoX
         run: |
           Rscript -e '
-          if (requireNamespace("scAnnoX", quietly=TRUE)) {
-            cat(
-              "scAnnoX installed successfully. Version:",
-              as.character(packageVersion("scAnnoX")),
-              "\n"
-            )
-          } else {
-            stop("scAnnoX could not be loaded.")
+          cat("Installed packages matching scAnnoX:\n")
+          print(installed.packages()[grep(
+            "scAnnoX",
+            rownames(installed.packages()),
+            ignore.case = TRUE
+          ), , drop = FALSE])
+
+          cat("\nTesting package namespace...\n")
+
+          if (!requireNamespace("scAnnoX", quietly = FALSE)) {
+            stop("scAnnoX installation/import failed.")
           }
+
+          cat(
+            "scAnnoX version:",
+            as.character(packageVersion("scAnnoX")),
+            "\n"
+          )
+
+          cat("scAnnoX loaded successfully.\n")
           '
 
       # ============================================================
