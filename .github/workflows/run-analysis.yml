@@ -18,10 +18,18 @@ jobs:
 
     steps:
 
+      # ============================================================
+      # 1. CHECKOUT
+      # ============================================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # ============================================================
+      # 2. R SETUP
+      # ============================================================
 
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
@@ -32,9 +40,14 @@ jobs:
       - name: Setup Pandoc
         uses: r-lib/actions/setup-pandoc@v2
 
+      # ============================================================
+      # 3. SYSTEM DEPENDENCIES
+      # ============================================================
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
+
           sudo apt-get install -y \
             libcurl4-openssl-dev \
             libssl-dev \
@@ -48,9 +61,22 @@ jobs:
             libfribidi-dev \
             libgit2-dev
 
+      # ============================================================
+      # 4. BIOCONDUCTOR
+      # ============================================================
+
       - name: Install BiocManager
         run: |
-          Rscript -e 'install.packages("BiocManager", repos="https://cloud.r-project.org")'
+          Rscript -e '
+          install.packages(
+            "BiocManager",
+            repos="https://cloud.r-project.org"
+          )
+          '
+
+      # ============================================================
+      # 5. CRAN PACKAGES
+      # ============================================================
 
       - name: Install CRAN packages
         run: |
@@ -70,6 +96,10 @@ jobs:
           )
           '
 
+      # ============================================================
+      # 6. BIOCONDUCTOR PACKAGES
+      # ============================================================
+
       - name: Install Bioconductor packages
         run: |
           Rscript -e '
@@ -85,7 +115,17 @@ jobs:
           )
           '
 
-      - name: Download scPred
+      # ============================================================
+      # 7. INSTALL scPred
+      #
+      # Do NOT use remotes::install_github().
+      # GitHub authentication was causing HTTP 401 errors.
+      #
+      # The public GitHub archive is downloaded with curl and
+      # installed locally using R CMD INSTALL.
+      # ============================================================
+
+      - name: Install scPred
         run: |
           curl -L \
             --fail \
@@ -95,93 +135,175 @@ jobs:
             "https://github.com/powellgenomicslab/scPred/archive/refs/heads/master.tar.gz" \
             -o scPred.tar.gz
 
-      - name: Install scPred
-        run: |
-          Rscript -e '
-          remotes::install_local(
-            "scPred.tar.gz",
-            dependencies=TRUE,
-            upgrade="never"
-          )
-          '
+          mkdir -p scPred-src
+
+          tar -xzf scPred.tar.gz \
+            --strip-components=1 \
+            -C scPred-src
+
+          R CMD INSTALL \
+            --no-multiarch \
+            --with-keep.source \
+            scPred-src
+
+      # ============================================================
+      # 8. TEST scPred
+      # ============================================================
 
       - name: Test scPred
         run: |
-          Rscript -e 'library(scPred); packageVersion("scPred")'
+          Rscript -e '
+          library(scPred)
+          cat("scPred version:", as.character(packageVersion("scPred")), "\n")
+          '
+
+      # ============================================================
+      # 9. INSTALL scAnnoX
+      #
+      # According to the repository structure:
+      #
+      # external/scAnnoX/DESCRIPTION
+      #
+      # NOT files/external/scAnnoX/
+      # ============================================================
 
       - name: Install scAnnoX
         run: |
-          if [ -f files/external/scAnnoX/DESCRIPTION ]; then
+          if [ -f external/scAnnoX/DESCRIPTION ]; then
+
             Rscript -e '
             remotes::install_local(
-              "files/external/scAnnoX",
+              "external/scAnnoX",
               dependencies=TRUE,
               upgrade="never"
             )
             '
+
           else
+
             echo "scAnnoX directory not found."
+            echo "Expected:"
+            echo "external/scAnnoX/DESCRIPTION"
+            echo ""
+            echo "Repository contents:"
+            ls -la
+            echo ""
+            echo "external directory:"
+            ls -la external 2>/dev/null || true
+
             exit 1
+
           fi
 
-      - name: Install scAnnoX
+      # ============================================================
+      # 10. TEST scAnnoX
+      # ============================================================
+
+      - name: Test scAnnoX
         run: |
-          if [ -f files/external/scAnnoX/DESCRIPTION ]; then
-            Rscript -e '
-            remotes::install_local(
-              "files/external/scAnnoX",
-              dependencies=TRUE,
-              upgrade="never"
+          Rscript -e '
+          if (requireNamespace("scAnnoX", quietly=TRUE)) {
+            cat(
+              "scAnnoX installed successfully. Version:",
+              as.character(packageVersion("scAnnoX")),
+              "\n"
             )
-            '
-          else
-            echo "scAnnoX directory not found."
-            exit 1
-          fi
+          } else {
+            stop("scAnnoX could not be loaded.")
+          }
+          '
+
+      # ============================================================
+      # 11. DOWNLOAD DATASET
+      # ============================================================
 
       - name: Run dataset download
         run: |
           Rscript scripts/01_download_GSE145410.R
 
+      # ============================================================
+      # 12. IMPORT + QC
+      # ============================================================
+
       - name: Run import and QC
         run: |
           Rscript scripts/02_import_and_QC.R
+
+      # ============================================================
+      # 13. NORMALIZATION + HVG
+      # ============================================================
 
       - name: Run normalization and HVG
         run: |
           Rscript scripts/03_normalization_HVG.R
 
+      # ============================================================
+      # 14. PCA + CLUSTERING + UMAP
+      # ============================================================
+
       - name: Run PCA clustering UMAP
         run: |
           Rscript scripts/04_PCA_clustering_UMAP.R
+
+      # ============================================================
+      # 15. SEURAT v5 CCA INTEGRATION
+      # ============================================================
 
       - name: Run Seurat integration
         run: |
           Rscript scripts/05_Seurat5_integration.R
 
+      # ============================================================
+      # 16. SINGLE-R ANNOTATION
+      # ============================================================
+
       - name: Run SingleR annotation
         run: |
           Rscript scripts/06_annotation_SingleR.R
+
+      # ============================================================
+      # 17. scPred ANNOTATION
+      # ============================================================
 
       - name: Run scPred annotation
         run: |
           Rscript scripts/07_annotation_scPred.R
 
+      # ============================================================
+      # 18. scAnnoX ANNOTATION
+      # ============================================================
+
       - name: Run scAnnoX annotation
         run: |
           Rscript scripts/08_annotation_scAnnoX.R
+
+      # ============================================================
+      # 19. COMPARE ANNOTATION METHODS
+      # ============================================================
 
       - name: Compare annotation methods
         run: |
           Rscript scripts/09_compare_annotations.R
 
+      # ============================================================
+      # 20. DIFFERENTIAL EXPRESSION
+      # ============================================================
+
       - name: Differential expression
         run: |
           Rscript scripts/10_differential_expression.R
 
+      # ============================================================
+      # 21. FINAL FIGURES
+      # ============================================================
+
       - name: Generate final figures
         run: |
           Rscript scripts/11_final_figures.R
+
+      # ============================================================
+      # 22. COMMIT RESULTS
+      # ============================================================
 
       - name: Commit analysis results
         run: |
@@ -196,4 +318,3 @@ jobs:
             git commit -m "Run AML scRNA-seq analysis pipeline"
             git push
           fi
-      - uses: actions/checkout@v4
