@@ -1,0 +1,10 @@
+Package: scAnnoX
+Title: Single Cell Annotation eXplorer
+Version: 0.1.0
+Authors@R: 
+    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"),
+           comment = c(ORCID = "YOUR-ORCID-ID"))
+Description: What the package does (one paragraph).
+License: MIT + file LICENSE
+Encoding: UTF-8
+RoxygenNote: 7.1.1
