@@ -1,10 +1,33 @@
 Package: scAnnoX
-Title: Single Cell Annotation eXplorer
-Version: 0.1.0
-Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"),
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
-License: MIT + file LICENSE
+Title: An R Package Integrating Multiple Public Tools for Single-Cell Annotation.
+Version: 1.0.0
+Date: 2024-01-06
+Authors: person("Xiaoqian", "Huang", "h_xiaoq@163.com", role = c("aut"))
+Maintainer: Xiaoqian Huang <h_xiaoq@163.com>
+Description: scAnnoX is an R package that integrates 10 different cell identity algorithms for single-cell sequencing data into a unified framework, and allows comparison between different algorithms.
+License: GPL (>=3)
 Encoding: UTF-8
-RoxygenNote: 7.1.1
+Roxygen: list(markdown = TRUE)
+oxygenNote: 7.2.3
+Depends:
+	R (>= 4.0.0),
+	Seurat,
+	dplyr,
+	HGNChelper,
+	devtools
+Imports:
+	SingleCellExperiment,
+	scSorter,
+	scCATCH,
+	SingleR,
+	scibetR,
+	CHETAH,
+	scmap,
+	CelliD,
+	SCINA,
+	future
+Suggests:
+	knitr,
+	rmarkdown
+VignetteBuilder: knitr
+RoxygenNote: 7.2.3
