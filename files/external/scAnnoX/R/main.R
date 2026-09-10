@@ -2,7 +2,7 @@
 
 #' @description Automated single-cell annotation using publicly available tools.
 #' @param obj.seu Seurat object, which needs to be annotated.
-#' @param ref.obj Seurat object, only when used with reference-based tools. Default: NULL.
+#' @param ref.obj Seurat object, only when used with refernce-based tools. Default: NULL.
 #' @param marker.lst A list contained maker genes for each cell type for marker based tool.
 #' Notably, ref.obj and marker.lst are antagonistic, and must be provide one. Default: NULL.
 #' @param method  A vector of automated annotation tools.
@@ -19,7 +19,7 @@ autoAnnoTools <- function(obj.seu,
                           method = c("SingleR", "Seurat", "sciBet", "scmap", "CHETAH", "scSorter", "sc.type", "cellID", "scCATCH", "SCINA"),
                           select.marker = c("Seurat"),
                           top.k = 30,
-                          strategy = c("reference-based", "marker-based"),
+                          strategy = c("refernce-based", "marker-based"),
                           ...) {
     multipleProcess(10)
     method.sc <- match.arg(method)
@@ -31,7 +31,7 @@ autoAnnoTools <- function(obj.seu,
             println("Marker list cannot be accessed", status = "ERROR")
         }
     }
-    if (match.arg(strategy) == "reference-based" && is.null(ref.obj)) {
+    if (match.arg(strategy) == "refernce-based" && is.null(ref.obj)) {
         println("Reference Seurat object must be assigned", status = "ERROR")
     }
     obj.seu <- switch(method.sc,

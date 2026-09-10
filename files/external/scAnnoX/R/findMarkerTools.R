@@ -57,7 +57,7 @@ multipleProcess <- function(n.workers = 10) {
 
 #' collapseLisToFrame
 
-#' Collapse the list to data.frame, which contains two columns, one is list names, and another is corresponding values.
+#' Collapse the list to data.frame, which contains two coloumns, one is list names, and another is correponding values.
 #' @param marker.lst A list with names.
 #' @return A collapsed data.frame.
 #' @export collapseLisToFrame
@@ -75,10 +75,10 @@ collapseLisToFrame <- function(marker.lst) {
 
 #' findMarkerToolsForSc
 
-#' Find markers for subsets using publicly available tools on the basis of single-cell data.
+#' Find markers for subsets using publicly avaiable tools on the basis of single-cell data.
 #' @param obj.seu Seurat object.
 #' @param to.list Convert the results to a list or not. If TRUE, the names of the list represent the subset, and values are marker genes.
-#' @param method A vector of publicly available tools. Default: Seurat.
+#' @param method A vector of publicly avaiable tools. Default: Seurat.
 #' @param top.k Top k expressed genes of each subset remained. Default: NULL.
 #' @param n.workers Number of cores for parallel when selected tool supported. Default: 4.
 #' @param ... More arguments can be assessed from the corresponding tools.
