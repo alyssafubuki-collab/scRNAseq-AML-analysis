@@ -13,14 +13,14 @@ autoAnnoTools(
     "cellID", "scCATCH", "SCINA"),
   select.marker = c("Seurat"),
   top.k = 30,
-  strategy = c("reference-based", "marker-based"),
+  strategy = c("refernce-based", "marker-based"),
   ...
 )
 }
 \arguments{
 \item{obj.seu}{Seurat object, which needs to be annotated.}
 
-\item{ref.obj}{Seurat object, only when used with reference-based tools. Default: NULL.}
+\item{ref.obj}{Seurat object, only when used with refernce-based tools. Default: NULL.}
 
 \item{marker.lst}{A list contained maker genes for each cell type for marker based tool.
 Notably, ref.obj and marker.lst are antagonistic, and must be provide one. Default: NULL.}
