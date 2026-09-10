@@ -115,14 +115,33 @@ jobs:
           )
           '
 
+       # ============================================================
+      # 7. INSTALL scPred DEPENDENCIES
       # ============================================================
-      # 7. INSTALL scPred
+
+      - name: Install scPred dependencies
+        run: |
+          Rscript -e '
+          install.packages(
+            c(
+              "harmony",
+              "ggbeeswarm",
+              "MLmetrics",
+              "caret",
+              "kernlab",
+              "pROC"
+            ),
+            repos="https://cloud.r-project.org",
+            dependencies=TRUE
+          )
+          '
+
+      # ============================================================
+      # 8. INSTALL scPred
       #
       # Do NOT use remotes::install_github().
       # GitHub authentication was causing HTTP 401 errors.
-      #
-      # The public GitHub archive is downloaded with curl and
-      # installed locally using R CMD INSTALL.
+      # Download the public archive with curl and install locally.
       # ============================================================
 
       - name: Install scPred
@@ -147,16 +166,19 @@ jobs:
             scPred-src
 
       # ============================================================
-      # 8. TEST scPred
+      # TEST scPred
       # ============================================================
 
       - name: Test scPred
         run: |
           Rscript -e '
           library(scPred)
-          cat("scPred version:", as.character(packageVersion("scPred")), "\n")
+          cat(
+            "scPred version:",
+            as.character(packageVersion("scPred")),
+            "\n"
+          )
           '
-
       # ============================================================
       # 9. INSTALL scAnnoX
       #
