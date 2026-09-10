@@ -78,18 +78,19 @@ Single-cell RNA-seq data
           v
  Biological interpretation
 ```
-
+---
 
 Main analyses
-1. Quality control
+---
+## 1. Quality control
 
 The workflow evaluates:
 
-Number of detected genes
-Total RNA counts
-Mitochondrial gene percentage
-Distribution of QC metrics
-Filtering of low-quality cells
+- Number of detected genes
+- Total RNA counts
+- Mitochondrial gene percentage
+- Distribution of QC metrics
+- Filtering of low-quality cells
 
 Example filtering strategy:
 ```text
@@ -100,27 +101,29 @@ percent.mt < 10
 These thresholds are examples and should be adapted to the
 characteristics of each dataset.
 
-2. Normalization
+## 2. Normalization
 
 Gene expression counts are normalized using the Seurat workflow.
 
 The analysis includes:
 
-Log normalization
-Highly variable gene identification
-Scaling
-Principal component analysis
-3. Dimensionality reduction
+- Log normalization
+- Highly variable gene identification
+- Scaling
+- Principal component analysis
+
+## 3. Dimensionality reduction
 
 Principal component analysis (PCA) is used to reduce the
 dimensionality of the expression matrix.
 
 The first principal components are then used for:
 
-Nearest-neighbor graph construction
-Clustering
-UMAP visualization
-4. Dataset integration
+- Nearest-neighbor graph construction
+- Clustering
+- UMAP visualization
+  
+## 4. Dataset integration
 
 Multiple samples can be integrated to reduce technical
 variation while preserving biological differences.
@@ -128,56 +131,64 @@ variation while preserving biological differences.
 The workflow supports Seurat v5 integration using
 CCAIntegration.
 
-5. Cell-type annotation
+## 5. Cell-type annotation
 
 Several annotation approaches can be compared:
 
-SingleR
-scPred
-ACTINN
+- SingleR
+- scPred
+- scAnnoX
 
 The purpose is to evaluate the consistency of predicted
 cell identities across different approaches.
 
-6. Differential expression
+## 6. Differential expression
 
 Differentially expressed genes can be identified between:
 
-Cell populations
-Experimental conditions
-Treatment time points
-Biological response groups
+- Cell populations
+- Experimental conditions
+- Treatment time points
+- Biological response groups
 
 The workflow uses Seurat differential expression functions.
 
-Technologies
-Programming
-R
-Bash
-Linux
-Bioinformatics
-Seurat
-SeuratObject
-Bioconductor
-SingleR
-scPred
-ACTINN
-Data analysis
-PCA
-Clustering
-UMAP
-Differential expression
-Dimensionality reduction
-Visualization
-ggplot2
-Seurat visualization tools
-Reproducibility
-Git
-GitHub
-Session information
-Script-based workflow
-Repository structure
+---
+## Technologies
+---
+## Programming
+- R
+- Bash
+- Linux
+  
+## Bioinformatics
+- Seurat
+- SeuratObject
+- Bioconductor
+- SingleR
+- scPred
+- scAnnoX
+  
+## Data analysis
+- PCA
+- Clustering
+- UMAP
+- Differential expression
+- Dimensionality reduction
 
+## Visualization
+- ggplot2
+- Seurat visualization tools
+
+## Reproducibility
+- Git
+- GitHub
+- Session information
+- Script-based workflow
+
+---
+Repository structure
+---
 ```text
 scRNAseq-AML-analysis/
 │
@@ -201,9 +212,9 @@ scRNAseq-AML-analysis/
 ├── docs/
 └── environment/
 ```
-
+---
 Reproducibility
-
+---
 The analysis is organized as a sequence of numbered scripts.
 
 The recommended execution order is:
@@ -223,8 +234,9 @@ Package versions and session information can be stored in:
 environment/packages.R
 environment/sessionInfo.txt
 ```
+---
 Data availability
-
+---
 No clinical or patient-level data are included in this repository.
 
 To reproduce the workflow, a public scRNA-seq dataset can be placed
@@ -233,28 +245,31 @@ in the data/ directory.
 The repository is designed so that the analysis scripts can be
 adapted to different scRNA-seq datasets.
 
+---
 My contribution
-
+---
 I developed and implemented the bioinformatics workflows presented
 in this repository.
 
 This includes:
 
-Data preprocessing
-Quality control
-Normalization
-Feature selection
-Dimensionality reduction
-Dataset integration
-Clustering
-Cell-type annotation
-Differential expression analysis
-Data visualization
+- Data preprocessing
+- Quality control
+- Normalization
+- Feature selection
+- Dimensionality reduction
+- Dataset integration
+- Clustering
+- Cell-type annotation
+- Differential expression analysis
+- Data visualization
 
 The workflow was developed from practical experience analyzing
 single-cell RNA-seq data during a research internship.
 
+---
 Background
+---
 
 This work was developed during my research experience at the
 Centre de Recherche en Cancérologie de Marseille (CRCM),
@@ -265,17 +280,19 @@ treatment response and resistance in acute myeloid leukemia.
 
 Only non-confidential computational material is presented here.
 
+---
 Author
+---
+Alyssa Chellal
 
-Alyssa Fubuki
-
-MSc Biologie de la Santé — Biomarkers & Artificial Intelligence
+Master Biologie-Santé parcours Biomarkers & Artificial Intelligence
 
 Aix-Marseille Université
 
 Bioinformatics | Single-cell RNA-seq | Multi-omics | Data analysis
 
+---
 License
-
+---
 This project is released under the MIT License.
 
