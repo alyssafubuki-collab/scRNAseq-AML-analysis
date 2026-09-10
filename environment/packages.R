@@ -1,39 +1,48 @@
 # ============================================================
-# packages.R
-# Package information
+# Record installed package versions
 # ============================================================
 
 packages <- c(
   "Seurat",
   "SeuratObject",
+  "scuttle",
+  "SingleR",
+  "celldex",
+  "SingleCellExperiment",
+  "scPred",
+  "harmony",
+  "GEOquery",
   "ggplot2",
   "dplyr",
-  "patchwork",
-  "Matrix"
+  "patchwork"
 )
 
 installed <- installed.packages()
 
-package_information <- data.frame(
+out <- data.frame(
   package = packages,
   version = sapply(
     packages,
     function(x) {
       if (x %in% rownames(installed)) {
-        as.character(
-          packageVersion(x)
-        )
+        as.character(packageVersion(x))
       } else {
-        NA
+        NA_character_
       }
     }
-  )
+  ),
+  stringsAsFactors = FALSE
 )
 
-print(package_information)
+dir.create(
+  "environment",
+  showWarnings = FALSE
+)
 
 write.csv(
-  package_information,
+  out,
   "environment/package_versions.csv",
   row.names = FALSE
 )
+
+print(out)
