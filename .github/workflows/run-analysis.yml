@@ -115,8 +115,12 @@ jobs:
           )
           '
 
-       # ============================================================
+      # ============================================================
       # 7. INSTALL scPred DEPENDENCIES
+      #
+      # scPred uses the legacy HarmonyMatrix API.
+      # Current Harmony 2.x no longer exports HarmonyMatrix.
+      # Therefore Harmony 1.2.4 is installed explicitly.
       # ============================================================
 
       - name: Install scPred dependencies
@@ -124,7 +128,6 @@ jobs:
           Rscript -e '
           install.packages(
             c(
-              "harmony",
               "ggbeeswarm",
               "MLmetrics",
               "caret",
@@ -137,11 +140,40 @@ jobs:
           '
 
       # ============================================================
+      # 7b. INSTALL COMPATIBLE HARMONY VERSION
+      # ============================================================
+
+      - name: Install Harmony 1.2.4
+        run: |
+          curl -L \
+            --fail \
+            --retry 3 \
+            "https://cran.r-project.org/src/contrib/Archive/harmony/harmony_1.2.4.tar.gz" \
+            -o harmony_1.2.4.tar.gz
+
+          R CMD INSTALL \
+            --no-multiarch \
+            --with-keep.source \
+            harmony_1.2.4.tar.gz
+
+          Rscript -e '
+          library(harmony)
+
+          if (!"HarmonyMatrix" %in% getNamespaceExports("harmony")) {
+            stop("HarmonyMatrix is not exported by installed Harmony.")
+          }
+
+          cat(
+            "Harmony version:",
+            as.character(packageVersion("harmony")),
+            "\n"
+          )
+
+          cat("HarmonyMatrix available: TRUE\n")
+          '
+
+      # ============================================================
       # 8. INSTALL scPred
-      #
-      # Do NOT use remotes::install_github().
-      # GitHub authentication was causing HTTP 401 errors.
-      # Download the public archive with curl and install locally.
       # ============================================================
 
       - name: Install scPred
@@ -173,12 +205,16 @@ jobs:
         run: |
           Rscript -e '
           library(scPred)
+
           cat(
             "scPred version:",
             as.character(packageVersion("scPred")),
             "\n"
           )
+
+          cat("scPred loaded successfully.\n")
           '
+          
       # ============================================================
       # 9. INSTALL scAnnoX
       #
