@@ -1,298 +1,182 @@
 # Single-Cell RNA-seq Analysis in AML
 
-A reproducible single-cell RNA-seq analysis workflow developed in R
-using Seurat and Bioconductor.
+A reproducible single-cell RNA-seq workflow in **R / Seurat v5** using a public AML dataset.
 
-## Overview
+## Dataset
 
-This repository presents a complete workflow for the analysis of
-single-cell RNA sequencing data.
+This portfolio uses **GSE145410**, a public GEO dataset containing 8 10X Genomics scRNA-seq samples from an AML bone-marrow experiment:
 
-The workflow covers the main stages of a typical scRNA-seq analysis:
+- DMSO A / B
+- INCB059872 A / B
+- AZA A / B
+- INCB059872 + AZA A / B
 
-- Quality control
-- Normalization
-- Highly variable gene selection
-- Principal component analysis
-- Dataset integration
-- Clustering
-- UMAP visualization
-- Cell-type annotation
-- Differential gene expression
-- Biological interpretation
+The dataset is publicly available from NCBI GEO.
 
-The project is designed as a bioinformatics portfolio demonstrating
-practical experience with R, Seurat, Bioconductor and single-cell
-transcriptomics.
+The workflow downloads the public matrices automatically; no clinical or private CRCM data are included.
 
-> This repository is a public portfolio version of analytical
-> workflows developed during my research experience.
->
-> No patient-level or confidential research data are included.
-
----
-
-## Biological context
-
-The original research experience involved the analysis of
-single-cell RNA-seq data in the context of treatment response
-and resistance in acute myeloid leukemia (AML).
-
-The public version of this repository focuses on the computational
-workflow rather than confidential clinical data.
-
----
-
-## Workflow
+## Analysis workflow
 
 ```text
-Single-cell RNA-seq data
-          |
-          v
-   Quality control
-          |
-          v
-    Normalization
-          |
-          v
- Highly variable genes
-          |
-          v
-        PCA
-          |
-          v
- Dataset integration
-          |
-          v
-      Clustering
-          |
-          v
-        UMAP
-          |
-          v
-   Cell annotation
-          |
-          v
+GSE145410
+   |
+   v
+Download 10X matrices
+   |
+   v
+Create Seurat objects
+   |
+   v
+QC metrics
+   |
+   v
+Adaptive QC with scuttle::isOutlier()
+   |
+   v
+Normalization + 2,000 HVGs
+   |
+   v
+PCA
+   |
+   v
+Seurat v5 CCA integration
+   |
+   v
+Clustering + UMAP
+   |
+   +--------------------+
+   |                    |
+   v                    v
+SingleR              scPred
+   |                    |
+   +---------+----------+
+             |
+             v
+          scAnnoX
+             |
+             v
+   Annotation comparison
+             |
+             v
  Differential expression
-          |
-          v
- Biological interpretation
+             |
+             v
+       Final figures
 ```
----
 
-Main analyses
----
-## 1. Quality control
+## Annotation methods
 
-The workflow evaluates:
+The annotation comparison is deliberately limited to the three approaches used in the research workflow represented by this portfolio:
 
-- Number of detected genes
-- Total RNA counts
-- Mitochondrial gene percentage
-- Distribution of QC metrics
-- Filtering of low-quality cells
+- **SingleR**
+- **scPred**
+- **scAnnoX**
 
-Example filtering strategy:
+ACTINN is not part of this repository.
+
+### Reference datasets
+
+SingleR uses the hematopoietic **Novershtern** reference available through `celldex`.
+
+scPred uses its public PBMC reference (`scPred::pbmc_1`) to train supervised classifiers.
+
+scAnnoX uses the same public scPred PBMC reference when the local Seurat-5-compatible scAnnoX package is available.
+
+Because these references do not contain every AML leukemic state, cells that do not match the reference populations may remain unassigned. This is preferable to forcing an inappropriate cell identity.
+
+## Important note about scAnnoX
+
+The original scAnnoX package was developed before the current Seurat v5 layer system. The original package is therefore **not silently substituted** here.
+
+The repository expects the Seurat-v5-compatible version of scAnnoX used in the original research workflow to be placed in:
+
 ```text
-nFeature_RNA > 300
-nFeature_RNA < 2500
-percent.mt < 10
+external/scAnnoX/
 ```
-These thresholds are examples and should be adapted to the
-characteristics of each dataset.
 
-## 2. Normalization
+The script `08_annotation_scAnnoX.R` checks for this directory and stops with a clear message if it is absent.
 
-Gene expression counts are normalized using the Seurat workflow.
+This keeps the portfolio reproducible and makes the Seurat-v5 compatibility modification explicit.
 
-The analysis includes:
+## Project structure
 
-- Log normalization
-- Highly variable gene identification
-- Scaling
-- Principal component analysis
-
-## 3. Dimensionality reduction
-
-Principal component analysis (PCA) is used to reduce the
-dimensionality of the expression matrix.
-
-The first principal components are then used for:
-
-- Nearest-neighbor graph construction
-- Clustering
-- UMAP visualization
-  
-## 4. Dataset integration
-
-Multiple samples can be integrated to reduce technical
-variation while preserving biological differences.
-
-The workflow supports Seurat v5 integration using
-CCAIntegration.
-
-## 5. Cell-type annotation
-
-Several annotation approaches can be compared:
-
-- SingleR
-- scPred
-- scAnnoX
-
-The purpose is to evaluate the consistency of predicted
-cell identities across different approaches.
-
-## 6. Differential expression
-
-Differentially expressed genes can be identified between:
-
-- Cell populations
-- Experimental conditions
-- Treatment time points
-- Biological response groups
-
-The workflow uses Seurat differential expression functions.
-
----
-## Technologies
----
-## Programming
-- R
-- Bash
-- Linux
-  
-## Bioinformatics
-- Seurat
-- SeuratObject
-- Bioconductor
-- SingleR
-- scPred
-- scAnnoX
-  
-## Data analysis
-- PCA
-- Clustering
-- UMAP
-- Differential expression
-- Dimensionality reduction
-
-## Visualization
-- ggplot2
-- Seurat visualization tools
-
-## Reproducibility
-- Git
-- GitHub
-- Session information
-- Script-based workflow
-
----
-Repository structure
----
 ```text
 scRNAseq-AML-analysis/
-│
+├── README.md
+├── LICENSE
+├── .gitignore
+├── data/
+│   └── README.md
+├── external/
+│   └── scAnnoX/
 ├── scripts/
-│   ├── 00_setup.R
-│   ├── 01_quality_control.R
-│   ├── 02_normalization_hvg.R
-│   ├── 03_pca_clustering_umap.R
-│   ├── 04_integration.R
-│   ├── 05_cell_annotation.R
-│   ├── 06_differential_expression.R
-│   └── 07_visualization.R
-│
+│   ├── 00_install_packages.R
+│   ├── 01_download_GSE145410.R
+│   ├── 02_import_and_QC.R
+│   ├── 03_normalization_HVG.R
+│   ├── 04_PCA_clustering_UMAP.R
+│   ├── 05_Seurat5_integration.R
+│   ├── 06_annotation_SingleR.R
+│   ├── 07_annotation_scPred.R
+│   ├── 08_annotation_scAnnoX.R
+│   ├── 09_compare_annotations.R
+│   ├── 10_differential_expression.R
+│   └── 11_final_figures.R
 ├── R/
 │   ├── functions.R
 │   └── plotting_functions.R
-│
-├── data/
 ├── figures/
+│   ├── qc/
+│   ├── integration/
+│   ├── annotation/
+│   └── differential_expression/
 ├── results/
+│   ├── qc/
+│   ├── annotation/
+│   └── differential_expression/
 ├── docs/
+│   └── workflow.md
 └── environment/
 ```
----
-Reproducibility
----
-The analysis is organized as a sequence of numbered scripts.
 
-The recommended execution order is:
+## Reproducibility
+
+Run the scripts in this order:
+
 ```text
-00_setup.R
-01_quality_control.R
-02_normalization_hvg.R
-03_pca_clustering_umap.R
-04_integration.R
-05_cell_annotation.R
-06_differential_expression.R
-07_visualization.R
+00_install_packages.R
+01_download_GSE145410.R
+02_import_and_QC.R
+03_normalization_HVG.R
+04_PCA_clustering_UMAP.R
+05_Seurat5_integration.R
+06_annotation_SingleR.R
+07_annotation_scPred.R
+08_annotation_scAnnoX.R
+09_compare_annotations.R
+10_differential_expression.R
+11_final_figures.R
 ```
 
-Package versions and session information can be stored in:
-```text
-environment/packages.R
-environment/sessionInfo.txt
-```
----
-Data availability
----
-No clinical or patient-level data are included in this repository.
+## Skills demonstrated
 
-To reproduce the workflow, a public scRNA-seq dataset can be placed
-in the data/ directory.
+- R
+- Seurat v5
+- Bioconductor
+- scuttle
+- SingleR
+- scPred
+- scAnnoX
+- PCA
+- CCA integration
+- clustering
+- UMAP
+- differential expression
+- reproducible workflow organisation
+- Git / GitHub
 
-The repository is designed so that the analysis scripts can be
-adapted to different scRNA-seq datasets.
+## Background
 
----
-My contribution
----
-I developed and implemented the bioinformatics workflows presented
-in this repository.
+This portfolio repository was designed from the computational workflow developed during a research experience in single-cell RNA-seq analysis of AML treatment response and resistance.
 
-This includes:
-
-- Data preprocessing
-- Quality control
-- Normalization
-- Feature selection
-- Dimensionality reduction
-- Dataset integration
-- Clustering
-- Cell-type annotation
-- Differential expression analysis
-- Data visualization
-
-The workflow was developed from practical experience analyzing
-single-cell RNA-seq data during a research internship.
-
----
-Background
----
-
-This work was developed during my research experience at the
-Centre de Recherche en Cancérologie de Marseille (CRCM),
-Aix-Marseille Université.
-
-The original research project involved single-cell analysis of
-treatment response and resistance in acute myeloid leukemia.
-
-Only non-confidential computational material is presented here.
-
----
-Author
----
-Alyssa Chellal
-
-Master Biologie-Santé parcours Biomarkers & Artificial Intelligence
-
-Aix-Marseille Université
-
-Bioinformatics | Single-cell RNA-seq | Multi-omics | Data analysis
-
----
-License
----
-This project is released under the MIT License.
-
+No patient-level or confidential research data are included.
