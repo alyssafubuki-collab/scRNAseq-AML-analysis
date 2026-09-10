@@ -128,12 +128,35 @@ ggsave(
 # Filtering
 # ------------------------------------------------------------
 
+library(scuttle)
+
+qc.lib <- isOutlier(
+    seurat_obj$nCount_RNA,
+    nmads = 3,
+    type = "lower",
+    log = TRUE
+)
+
+qc.features <- isOutlier(
+    seurat_obj$nFeature_RNA,
+    nmads = 3,
+    type = "lower",
+    log = TRUE
+)
+
+qc.mito <- isOutlier(
+    seurat_obj$percent.mt,
+    nmads = 3,
+    type = "higher"
+)
+
+discard <- qc.lib | qc.features | qc.mito
+
+seurat_obj$discard <- discard
+
 seurat_obj <- subset(
-  seurat_obj,
-  subset =
-    nFeature_RNA > 300 &
-    nFeature_RNA < 2500 &
-    percent.mt < 10
+    seurat_obj,
+    subset = discard == FALSE
 )
 
 # ------------------------------------------------------------
