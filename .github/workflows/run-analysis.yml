@@ -1,0 +1,169 @@
+name: Run AML scRNA-seq analysis
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  analysis:
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 360
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.4'
+          use-public-rspm: true
+
+      - name: Setup Pandoc
+        uses: r-lib/actions/setup-pandoc@v2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            libxml2-dev \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libpng-dev \
+            libjpeg-dev \
+            libtiff-dev \
+            libharfbuzz-dev \
+            libfribidi-dev \
+            libgit2-dev
+
+      - name: Install BiocManager
+        run: |
+          Rscript -e 'install.packages("BiocManager", repos="https://cloud.r-project.org")'
+
+      - name: Install CRAN packages
+        run: |
+          Rscript -e '
+          install.packages(
+            c(
+              "Seurat",
+              "SeuratObject",
+              "ggplot2",
+              "dplyr",
+              "data.table",
+              "patchwork",
+              "Matrix",
+              "remotes"
+            ),
+            repos="https://cloud.r-project.org"
+          )
+          '
+
+      - name: Install Bioconductor packages
+        run: |
+          Rscript -e '
+          BiocManager::install(
+            c(
+              "SingleR",
+              "celldex",
+              "scuttle",
+              "SummarizedExperiment"
+            ),
+            ask=FALSE,
+            update=FALSE
+          )
+          '
+
+      - name: Install scPred
+        run: |
+          Rscript -e '
+          remotes::install_github(
+            "powellgenomicslab/scPred",
+            dependencies=TRUE,
+            upgrade="never"
+          )
+          '
+
+      - name: Install scAnnoX
+        run: |
+          if [ -f external/scAnnoX/DESCRIPTION ]; then
+            Rscript -e '
+            remotes::install_local(
+              "external/scAnnoX",
+              dependencies=TRUE,
+              upgrade="never"
+            )
+            '
+          else
+            echo "scAnnoX directory not found."
+            exit 1
+          fi
+
+      - name: Run dataset download
+        run: |
+          Rscript scripts/01_download_GSE145410.R
+
+      - name: Run import and QC
+        run: |
+          Rscript scripts/02_import_and_QC.R
+
+      - name: Run normalization and HVG
+        run: |
+          Rscript scripts/03_normalization_HVG.R
+
+      - name: Run PCA clustering UMAP
+        run: |
+          Rscript scripts/04_PCA_clustering_UMAP.R
+
+      - name: Run Seurat integration
+        run: |
+          Rscript scripts/05_Seurat5_integration.R
+
+      - name: Run SingleR annotation
+        run: |
+          Rscript scripts/06_annotation_SingleR.R
+
+      - name: Run scPred annotation
+        run: |
+          Rscript scripts/07_annotation_scPred.R
+
+      - name: Run scAnnoX annotation
+        run: |
+          Rscript scripts/08_annotation_scAnnoX.R
+
+      - name: Compare annotation methods
+        run: |
+          Rscript scripts/09_compare_annotations.R
+
+      - name: Differential expression
+        run: |
+          Rscript scripts/10_differential_expression.R
+
+      - name: Generate final figures
+        run: |
+          Rscript scripts/11_final_figures.R
+
+      - name: Commit analysis results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add results/ docs/ figures/ 2>/dev/null || true
+
+          if git diff --cached --quiet; then
+            echo "No new results to commit."
+          else
+            git commit -m "Run AML scRNA-seq analysis pipeline"
+            git push
+          fi
