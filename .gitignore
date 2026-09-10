@@ -48,3 +48,15 @@ results/generated/
 # ============================================================
 
 *.html
+
+data/*
+!data/.gitkeep
+
+.Rhistory
+.RData
+.Rproj.user/
+
+*.tar.gz
+
+renv/library/
+renv/staging/
