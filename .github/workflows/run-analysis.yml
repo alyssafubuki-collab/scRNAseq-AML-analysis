@@ -88,13 +88,31 @@ jobs:
       - name: Install scPred
         run: |
           Rscript -e '
-          remotes::install_github(
-            "powellgenomicslab/scPred",
+          remotes::install_url(
+            "https://github.com/powellgenomicslab/scPred/archive/refs/heads/master.tar.gz",
             dependencies=TRUE,
-            upgrade="never",
-            auth_token=NULL
+            upgrade="never"
           )
           '
+
+      - name: Test scPred
+        run: |
+          Rscript -e 'library(scPred); packageVersion("scPred")'
+
+      - name: Install scAnnoX
+        run: |
+          if [ -f files/external/scAnnoX/DESCRIPTION ]; then
+            Rscript -e '
+            remotes::install_local(
+              "files/external/scAnnoX",
+              dependencies=TRUE,
+              upgrade="never"
+            )
+            '
+          else
+            echo "scAnnoX directory not found."
+            exit 1
+          fi
 
       - name: Install scAnnoX
         run: |
@@ -168,3 +186,4 @@ jobs:
             git commit -m "Run AML scRNA-seq analysis pipeline"
             git push
           fi
+      - uses: actions/checkout@v4
