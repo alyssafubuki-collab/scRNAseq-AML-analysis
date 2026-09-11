@@ -23,13 +23,13 @@ jobs:
 
 
       # ============================================================
-      # 2. R SETUP
+      # 2. SETUP R
       # ============================================================
 
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
         with:
-          r-version: '4.4'
+          r-version: "4.4"
           use-public-rspm: true
 
 
@@ -42,6 +42,10 @@ jobs:
           sudo apt-get update
 
           sudo apt-get install -y \
+            build-essential \
+            g++ \
+            gcc \
+            gfortran \
             libcurl4-openssl-dev \
             libssl-dev \
             libxml2-dev \
@@ -57,43 +61,66 @@ jobs:
             libgsl-dev \
             libhdf5-dev \
             liblapack-dev \
-            libblas-dev \
-            gfortran
+            libblas-dev
 
 
       # ============================================================
-      # 4. BASIC R CONFIGURATION
+      # 4. CRAN CONFIGURATION
       # ============================================================
 
-      - name: Configure CRAN repository
+      - name: Configure CRAN
         run: |
           Rscript -e '
             options(
-              repos = c(CRAN = "https://cloud.r-project.org")
+              repos = c(
+                CRAN = "https://cloud.r-project.org"
+              )
             )
-            print(getOption("repos"))
+
+            cat(
+              "CRAN = ",
+              getOption("repos")["CRAN"],
+              "\n",
+              sep = ""
+            )
           '
 
 
       # ============================================================
-      # 5. BIOCONDUCTOR
+      # 5. INSTALL BiocManager
       # ============================================================
 
       - name: Install BiocManager
         run: |
           Rscript -e '
-            options(repos = c(CRAN = "https://cloud.r-project.org"))
+            options(
+              repos = c(
+                CRAN = "https://cloud.r-project.org"
+              )
+            )
 
-            if (!requireNamespace("BiocManager", quietly = TRUE)) {
+            if (!requireNamespace(
+              "BiocManager",
+              quietly = TRUE
+            )) {
               install.packages(
                 "BiocManager",
-                dependencies = c("Depends", "Imports", "LinkingTo")
+                dependencies = c(
+                  "Depends",
+                  "Imports",
+                  "LinkingTo"
+                )
               )
             }
 
-            cat("BiocManager version:",
-                as.character(packageVersion("BiocManager")),
-                "\n")
+            cat(
+              "BiocManager ",
+              as.character(
+                packageVersion("BiocManager")
+              ),
+              "\n",
+              sep = ""
+            )
           '
 
 
@@ -104,9 +131,13 @@ jobs:
       - name: Install core CRAN packages
         run: |
           Rscript -e '
-            options(repos = c(CRAN = "https://cloud.r-project.org"))
+            options(
+              repos = c(
+                CRAN = "https://cloud.r-project.org"
+              )
+            )
 
-            pkgs <- c(
+            packages <- c(
               "Seurat",
               "SeuratObject",
               "dplyr",
@@ -121,11 +152,18 @@ jobs:
               "devtools"
             )
 
-            installed <- rownames(installed.packages())
-            missing <- setdiff(pkgs, installed)
+            installed <- rownames(
+              installed.packages()
+            )
+
+            missing <- setdiff(
+              packages,
+              installed
+            )
 
             if (length(missing) > 0) {
-              cat("Installing missing CRAN packages:\n")
+
+              cat("Installing:\n")
               print(missing)
 
               install.packages(
@@ -138,18 +176,24 @@ jobs:
               )
             }
 
-            cat("Core CRAN packages ready.\n")
+            cat(
+              "Core CRAN packages ready.\n"
+            )
           '
 
 
       # ============================================================
-      # 7. SINGLE-CELL / BIOCONDUCTOR CORE
+      # 7. BIOCONDUCTOR SINGLE-CELL PACKAGES
       # ============================================================
 
-      - name: Install Bioconductor single-cell packages
+      - name: Install Bioconductor packages
         run: |
           Rscript -e '
-            options(repos = c(CRAN = "https://cloud.r-project.org"))
+            options(
+              repos = c(
+                CRAN = "https://cloud.r-project.org"
+              )
+            )
 
             BiocManager::install(
               c(
@@ -162,72 +206,149 @@ jobs:
               update = FALSE
             )
 
-            cat("Core Bioconductor packages installed.\n")
+            cat(
+              "Bioconductor core packages ready.\n"
+            )
           '
 
 
       # ============================================================
-      # 8. C++14 CONFIGURATION
+      # 8. FORCE C++14
       #
-      # CelliD / RcppArmadillo requires C++14 on current R 4.4.
-      # This MUST happen before installing CelliD.
+      # IMPORTANT:
+      # This step occurs BEFORE CelliD installation.
       # ============================================================
 
-      - name: Configure C++14 for CelliD
+      - name: Configure C++14 compilation
         run: |
-          mkdir -p ~/.R
 
-          cat > ~/.R/Makevars <<'EOF'
+          echo "========================================"
+          echo "Configuring C++14"
+          echo "========================================"
+
+          mkdir -p "${HOME}/.R"
+
+          cat > "${HOME}/.R/Makevars" <<'EOF'
           CXX_STD = CXX14
           CXX14STD = -std=gnu++14
+          PKG_CXXFLAGS = -std=gnu++14
           EOF
 
+          echo ""
           echo "===== ~/.R/Makevars ====="
-          cat ~/.R/Makevars
+          cat "${HOME}/.R/Makevars"
 
+          echo ""
           echo "===== Compiler ====="
+          which g++
           g++ --version
 
-          echo "===== R configuration ====="
+          echo ""
+          echo "===== R C++ configuration ====="
           R CMD config CXX
+          R CMD config CXX11
           R CMD config CXX14
           R CMD config CXX14STD
 
+          echo ""
+          echo "========================================"
+          echo "Testing C++14 compiler"
+          echo "========================================"
+
+          cat > /tmp/test_cpp14.cpp <<'EOF'
+          #include <iostream>
+          #include <vector>
+
+          template <typename T>
+          auto test_function(T value) {
+              return value;
+          }
+
+          int main() {
+              std::cout << test_function(42) << std::endl;
+              return 0;
+          }
+          EOF
+
+          g++ \
+            -std=gnu++14 \
+            /tmp/test_cpp14.cpp \
+            -o /tmp/test_cpp14
+
+          /tmp/test_cpp14
+
+          echo ""
+          echo "C++14 compiler test passed."
+
 
       # ============================================================
-      # 9. RCPP / RCPPARMADILLO
+      # 9. RCPP + RCPPARMADILLO
       # ============================================================
 
-      - name: Install Rcpp and RcppArmadillo
+      - name: Install Rcpp dependencies
+        env:
+          CXXFLAGS: "-std=gnu++14"
+          PKG_CXXFLAGS: "-std=gnu++14"
         run: |
-          Rscript -e '
-            options(repos = c(CRAN = "https://cloud.r-project.org"))
 
-            pkgs <- c(
-              "Rcpp",
-              "RcppArmadillo"
+          Rscript - <<'EOF'
+
+          options(
+            repos = c(
+              CRAN = "https://cloud.r-project.org"
             )
+          )
+
+          Sys.setenv(
+            CXXFLAGS = "-std=gnu++14",
+            PKG_CXXFLAGS = "-std=gnu++14"
+          )
+
+          packages <- c(
+            "Rcpp",
+            "RcppArmadillo"
+          )
+
+          installed <- rownames(
+            installed.packages()
+          )
+
+          missing <- setdiff(
+            packages,
+            installed
+          )
+
+          if (length(missing) > 0) {
 
             install.packages(
-              pkgs,
+              missing,
               dependencies = c(
                 "Depends",
                 "Imports",
                 "LinkingTo"
               )
             )
+          }
 
-            cat("Rcpp versions:\n")
-            cat("Rcpp: ",
-                as.character(packageVersion("Rcpp")),
-                "\n",
-                sep = "")
+          cat(
+            "Rcpp ",
+            as.character(
+              packageVersion("Rcpp")
+            ),
+            "\n",
+            sep = ""
+          )
 
-            cat("RcppArmadillo: ",
-                as.character(packageVersion("RcppArmadillo")),
-                "\n",
-                sep = "")
-          '
+          cat(
+            "RcppArmadillo ",
+            as.character(
+              packageVersion("RcppArmadillo")
+            ),
+            "\n",
+            sep = ""
+          )
+
+          EOF
 
 
       # ============================================================
@@ -237,9 +358,13 @@ jobs:
       - name: Install scPred dependencies
         run: |
           Rscript -e '
-            options(repos = c(CRAN = "https://cloud.r-project.org"))
+            options(
+              repos = c(
+                CRAN = "https://cloud.r-project.org"
+              )
+            )
 
-            pkgs <- c(
+            packages <- c(
               "harmony",
               "ggbeeswarm",
               "MLmetrics",
@@ -248,10 +373,17 @@ jobs:
               "pROC"
             )
 
-            installed <- rownames(installed.packages())
-            missing <- setdiff(pkgs, installed)
+            installed <- rownames(
+              installed.packages()
+            )
+
+            missing <- setdiff(
+              packages,
+              installed
+            )
 
             if (length(missing) > 0) {
+
               install.packages(
                 missing,
                 dependencies = c(
@@ -262,49 +394,50 @@ jobs:
               )
             }
 
-            cat("scPred dependencies ready.\n")
+            cat(
+              "scPred dependencies ready.\n"
+            )
           '
 
 
       # ============================================================
-      # 11. INSTALL HARMONY 1.2.4
+      # 11. HARMONY 1.2.4
       #
-      # scPred expects HarmonyMatrix().
-      # Current Harmony versions may not export it.
+      # scPred requires HarmonyMatrix().
       # ============================================================
 
       - name: Install Harmony 1.2.4
         run: |
-          Rscript -e '
-            if (requireNamespace("harmony", quietly = TRUE)) {
 
-              has_harmony_matrix <- "HarmonyMatrix" %in%
-                getNamespaceExports("harmony")
+          echo "Checking HarmonyMatrix..."
 
-              if (has_harmony_matrix) {
-                cat("HarmonyMatrix already available.\n")
-                quit(status = 0)
-              }
+          if Rscript -e '
+            if (!requireNamespace(
+              "harmony",
+              quietly = TRUE
+            )) {
+              quit(status = 1)
             }
 
-            quit(status = 1)
-          ' || true
+            if (!"HarmonyMatrix" %in%
+                getNamespaceExports("harmony")) {
+              quit(status = 1)
+            }
 
-          if ! Rscript -e '
-            suppressPackageStartupMessages(library(harmony))
-            quit(
-              status = ifelse(
-                "HarmonyMatrix" %in% getNamespaceExports("harmony"),
-                0,
-                1
-              )
-            )
+            quit(status = 0)
           '
           then
 
+            echo "HarmonyMatrix already available."
+
+          else
+
             echo "Installing Harmony 1.2.4..."
 
-            curl -L --fail --retry 3 \
+            curl \
+              -L \
+              --fail \
+              --retry 3 \
               "https://cran.r-project.org/src/contrib/Archive/harmony/harmony_1.2.4.tar.gz" \
               -o harmony_1.2.4.tar.gz
 
@@ -320,25 +453,48 @@ jobs:
 
             if (!"HarmonyMatrix" %in%
                 getNamespaceExports("harmony")) {
-              stop("HarmonyMatrix is not available.")
+              stop(
+                "HarmonyMatrix is not available."
+              )
             }
 
-            cat("HarmonyMatrix is available.\n")
+            cat(
+              "HarmonyMatrix is available.\n"
+            )
           '
 
 
       # ============================================================
-      # 12. INSTALL scPred
+      # 12. scPred
       # ============================================================
 
       - name: Install scPred
         run: |
-          if ! Rscript -e 'quit(status = ifelse(requireNamespace("scPred", quietly = TRUE), 0, 1))'
+
+          if Rscript -e '
+            quit(
+              status = ifelse(
+                requireNamespace(
+                  "scPred",
+                  quietly = TRUE
+                ),
+                0,
+                1
+              )
+            )
+          '
           then
+
+            echo "scPred already installed."
+
+          else
 
             echo "Installing scPred..."
 
-            curl -L --fail --retry 3 \
+            curl \
+              -L \
+              --fail \
+              --retry 3 \
               "https://github.com/powellgenomicslab/scPred/archive/refs/heads/master.tar.gz" \
               -o scPred.tar.gz
 
@@ -350,10 +506,20 @@ jobs:
           fi
 
           Rscript -e '
-            library(scPred)
+            if (!requireNamespace(
+              "scPred",
+              quietly = TRUE
+            )) {
+              stop(
+                "scPred installation failed."
+              )
+            }
+
             cat(
               "scPred ",
-              as.character(packageVersion("scPred")),
+              as.character(
+                packageVersion("scPred")
+              ),
               " installed.\n",
               sep = ""
             )
@@ -362,19 +528,35 @@ jobs:
 
       # ============================================================
       # 13. scSorter
-      #
-      # Removed from current CRAN index.
-      # Install archived 0.0.2.
       # ============================================================
 
       - name: Install scSorter
         run: |
-          if ! Rscript -e 'quit(status = ifelse(requireNamespace("scSorter", quietly = TRUE), 0, 1))'
+
+          if Rscript -e '
+            quit(
+              status = ifelse(
+                requireNamespace(
+                  "scSorter",
+                  quietly = TRUE
+                ),
+                0,
+                1
+              )
+            )
+          '
           then
 
-            echo "Installing scSorter 0.0.2 from CRAN archive..."
+            echo "scSorter already installed."
 
-            curl -L --fail --retry 3 \
+          else
+
+            echo "Installing scSorter 0.0.2..."
+
+            curl \
+              -L \
+              --fail \
+              --retry 3 \
               "https://cran.r-project.org/src/contrib/Archive/scSorter/scSorter_0.0.2.tar.gz" \
               -o scSorter_0.0.2.tar.gz
 
@@ -386,13 +568,20 @@ jobs:
           fi
 
           Rscript -e '
-            if (!requireNamespace("scSorter", quietly = TRUE)) {
-              stop("scSorter installation failed.")
+            if (!requireNamespace(
+              "scSorter",
+              quietly = TRUE
+            )) {
+              stop(
+                "scSorter installation failed."
+              )
             }
 
             cat(
               "scSorter ",
-              as.character(packageVersion("scSorter")),
+              as.character(
+                packageVersion("scSorter")
+              ),
               " installed.\n",
               sep = ""
             )
@@ -405,10 +594,19 @@ jobs:
 
       - name: Install scCATCH
         run: |
-          Rscript -e '
-            options(repos = c(CRAN = "https://cloud.r-project.org"))
 
-            if (!requireNamespace("scCATCH", quietly = TRUE)) {
+          Rscript -e '
+
+            options(
+              repos = c(
+                CRAN = "https://cloud.r-project.org"
+              )
+            )
+
+            if (!requireNamespace(
+              "scCATCH",
+              quietly = TRUE
+            )) {
 
               install.packages(
                 "scCATCH",
@@ -420,11 +618,20 @@ jobs:
               )
             }
 
-            library(scCATCH)
+            if (!requireNamespace(
+              "scCATCH",
+              quietly = TRUE
+            )) {
+              stop(
+                "scCATCH installation failed."
+              )
+            }
 
             cat(
               "scCATCH ",
-              as.character(packageVersion("scCATCH")),
+              as.character(
+                packageVersion("scCATCH")
+              ),
               " installed.\n",
               sep = ""
             )
@@ -437,8 +644,13 @@ jobs:
 
       - name: Install scmap
         run: |
+
           Rscript -e '
-            if (!requireNamespace("scmap", quietly = TRUE)) {
+
+            if (!requireNamespace(
+              "scmap",
+              quietly = TRUE
+            )) {
 
               BiocManager::install(
                 "scmap",
@@ -447,13 +659,20 @@ jobs:
               )
             }
 
-            if (!requireNamespace("scmap", quietly = TRUE)) {
-              stop("scmap installation failed.")
+            if (!requireNamespace(
+              "scmap",
+              quietly = TRUE
+            )) {
+              stop(
+                "scmap installation failed."
+              )
             }
 
             cat(
               "scmap ",
-              as.character(packageVersion("scmap")),
+              as.character(
+                packageVersion("scmap")
+              ),
               " installed.\n",
               sep = ""
             )
@@ -463,34 +682,142 @@ jobs:
       # ============================================================
       # 16. CelliD
       #
-      # C++14 configuration was created above.
+      # C++14 is forced at BOTH:
+      # - ~/.R/Makevars
+      # - environment level
       # ============================================================
 
       - name: Install CelliD
+        env:
+          CXXFLAGS: "-std=gnu++14"
+          PKG_CXXFLAGS: "-std=gnu++14"
+          MAKEFLAGS: "-j2"
         run: |
-          Rscript -e '
-            if (!requireNamespace("CelliD", quietly = TRUE)) {
 
-              cat("Installing CelliD...\n")
+          echo "========================================"
+          echo "Installing CelliD"
+          echo "========================================"
 
-              BiocManager::install(
-                "CelliD",
-                ask = FALSE,
-                update = FALSE
+          echo ""
+          echo "Environment:"
+          echo "CXXFLAGS=${CXXFLAGS}"
+          echo "PKG_CXXFLAGS=${PKG_CXXFLAGS}"
+          echo "MAKEFLAGS=${MAKEFLAGS}"
+
+          echo ""
+          echo "Makevars:"
+          cat "${HOME}/.R/Makevars"
+
+          Rscript - <<'EOF'
+
+          options(
+            repos = c(
+              CRAN = "https://cloud.r-project.org"
+            )
+          )
+
+          Sys.setenv(
+            CXXFLAGS = "-std=gnu++14",
+            PKG_CXXFLAGS = "-std=gnu++14"
+          )
+
+          cat(
+            "R CXXFLAGS = ",
+            Sys.getenv("CXXFLAGS"),
+            "\n",
+            sep = ""
+          )
+
+          cat(
+            "R PKG_CXXFLAGS = ",
+            Sys.getenv("PKG_CXXFLAGS"),
+            "\n",
+            sep = ""
+          )
+
+          # --------------------------------------------------------
+          # Make sure Rcpp is available
+          # --------------------------------------------------------
+
+          if (!requireNamespace(
+            "Rcpp",
+            quietly = TRUE
+          )) {
+
+            install.packages(
+              "Rcpp",
+              dependencies = c(
+                "Depends",
+                "Imports",
+                "LinkingTo"
               )
-            }
+            )
+          }
 
-            if (!requireNamespace("CelliD", quietly = TRUE)) {
-              stop("CelliD installation failed.")
-            }
+          # --------------------------------------------------------
+          # Make sure RcppArmadillo is available
+          # --------------------------------------------------------
+
+          if (!requireNamespace(
+            "RcppArmadillo",
+            quietly = TRUE
+          )) {
+
+            install.packages(
+              "RcppArmadillo",
+              dependencies = c(
+                "Depends",
+                "Imports",
+                "LinkingTo"
+              )
+            )
+          }
+
+          # --------------------------------------------------------
+          # Install CelliD
+          # --------------------------------------------------------
+
+          if (!requireNamespace(
+            "CelliD",
+            quietly = TRUE
+          )) {
 
             cat(
-              "CelliD ",
-              as.character(packageVersion("CelliD")),
-              " installed.\n",
-              sep = ""
+              "\nInstalling CelliD with C++14...\n\n"
             )
-          '
+
+            BiocManager::install(
+              "CelliD",
+              ask = FALSE,
+              update = FALSE,
+              force = TRUE
+            )
+          }
+
+          # --------------------------------------------------------
+          # Verify
+          # --------------------------------------------------------
+
+          if (!requireNamespace(
+            "CelliD",
+            quietly = TRUE
+          )) {
+
+            stop(
+              "CelliD installation failed."
+            )
+          }
+
+          cat(
+            "\nCelliD ",
+            as.character(
+              packageVersion("CelliD")
+            ),
+            " installed successfully.\n",
+            sep = ""
+          )
+
+          EOF
 
 
       # ============================================================
@@ -499,8 +826,13 @@ jobs:
 
       - name: Install CHETAH
         run: |
+
           Rscript -e '
-            if (!requireNamespace("CHETAH", quietly = TRUE)) {
+
+            if (!requireNamespace(
+              "CHETAH",
+              quietly = TRUE
+            )) {
 
               BiocManager::install(
                 "CHETAH",
@@ -509,13 +841,20 @@ jobs:
               )
             }
 
-            if (!requireNamespace("CHETAH", quietly = TRUE)) {
-              stop("CHETAH installation failed.")
+            if (!requireNamespace(
+              "CHETAH",
+              quietly = TRUE
+            )) {
+              stop(
+                "CHETAH installation failed."
+              )
             }
 
             cat(
               "CHETAH ",
-              as.character(packageVersion("CHETAH")),
+              as.character(
+                packageVersion("CHETAH")
+              ),
               " installed.\n",
               sep = ""
             )
@@ -524,19 +863,35 @@ jobs:
 
       # ============================================================
       # 18. SCINA
-      #
-      # Removed from CRAN.
-      # Install archived version.
       # ============================================================
 
       - name: Install SCINA
         run: |
-          if ! Rscript -e 'quit(status = ifelse(requireNamespace("SCINA", quietly = TRUE), 0, 1))'
+
+          if Rscript -e '
+            quit(
+              status = ifelse(
+                requireNamespace(
+                  "SCINA",
+                  quietly = TRUE
+                ),
+                0,
+                1
+              )
+            )
+          '
           then
 
-            echo "Installing SCINA 1.2.0 from CRAN archive..."
+            echo "SCINA already installed."
 
-            curl -L --fail --retry 3 \
+          else
+
+            echo "Installing SCINA 1.2.0..."
+
+            curl \
+              -L \
+              --fail \
+              --retry 3 \
               "https://cran.r-project.org/src/contrib/Archive/SCINA/SCINA_1.2.0.tar.gz" \
               -o SCINA_1.2.0.tar.gz
 
@@ -548,13 +903,21 @@ jobs:
           fi
 
           Rscript -e '
-            if (!requireNamespace("SCINA", quietly = TRUE)) {
-              stop("SCINA installation failed.")
+
+            if (!requireNamespace(
+              "SCINA",
+              quietly = TRUE
+            )) {
+              stop(
+                "SCINA installation failed."
+              )
             }
 
             cat(
               "SCINA ",
-              as.character(packageVersion("SCINA")),
+              as.character(
+                packageVersion("SCINA")
+              ),
               " installed.\n",
               sep = ""
             )
@@ -567,12 +930,31 @@ jobs:
 
       - name: Install scibetR
         run: |
-          if ! Rscript -e 'quit(status = ifelse(requireNamespace("scibetR", quietly = TRUE), 0, 1))'
+
+          if Rscript -e '
+            quit(
+              status = ifelse(
+                requireNamespace(
+                  "scibetR",
+                  quietly = TRUE
+                ),
+                0,
+                1
+              )
+            )
+          '
           then
 
-            echo "Installing scibetR from GitHub..."
+            echo "scibetR already installed."
 
-            curl -L --fail --retry 3 \
+          else
+
+            echo "Installing scibetR..."
+
+            curl \
+              -L \
+              --fail \
+              --retry 3 \
               "https://github.com/zwj-tina/scibetR/archive/refs/heads/master.tar.gz" \
               -o scibetR.tar.gz
 
@@ -584,13 +966,21 @@ jobs:
           fi
 
           Rscript -e '
-            if (!requireNamespace("scibetR", quietly = TRUE)) {
-              stop("scibetR installation failed.")
+
+            if (!requireNamespace(
+              "scibetR",
+              quietly = TRUE
+            )) {
+              stop(
+                "scibetR installation failed."
+              )
             }
 
             cat(
               "scibetR ",
-              as.character(packageVersion("scibetR")),
+              as.character(
+                packageVersion("scibetR")
+              ),
               " installed.\n",
               sep = ""
             )
@@ -598,11 +988,12 @@ jobs:
 
 
       # ============================================================
-      # 20. VERIFY ALL scAnnoX DEPENDENCIES
+      # 20. VERIFY ALL DEPENDENCIES
       # ============================================================
 
       - name: Verify scAnnoX dependencies
         run: |
+
           Rscript - <<'EOF'
 
           required <- c(
@@ -622,27 +1013,35 @@ jobs:
             "scibetR"
           )
 
-          cat("========================================\n")
-          cat("Checking scAnnoX dependencies\n")
-          cat("========================================\n")
+          cat(
+            "========================================\n"
+          )
+
+          cat(
+            "Checking scAnnoX dependencies\n"
+          )
+
+          cat(
+            "========================================\n\n"
+          )
 
           failed <- character(0)
 
           for (pkg in required) {
 
-            ok <- requireNamespace(
+            available <- requireNamespace(
               pkg,
               quietly = TRUE
             )
 
-            if (ok) {
+            if (available) {
 
               version <- as.character(
                 packageVersion(pkg)
               )
 
               cat(
-                "OK     ",
+                "OK       ",
                 pkg,
                 " ",
                 version,
@@ -653,7 +1052,7 @@ jobs:
             } else {
 
               cat(
-                "FAILED ",
+                "FAILED   ",
                 pkg,
                 "\n",
                 sep = ""
@@ -668,7 +1067,10 @@ jobs:
 
           if (length(failed) > 0) {
 
-            cat("\nMissing packages:\n")
+            cat(
+              "\nMissing packages:\n"
+            )
+
             print(failed)
 
             stop(
@@ -676,40 +1078,75 @@ jobs:
             )
           }
 
-          cat("\nAll scAnnoX dependencies are installed.\n")
+          cat(
+            "\nAll scAnnoX dependencies are installed.\n"
+          )
 
           EOF
 
 
       # ============================================================
-      # 21. INSTALL LOCAL MODIFIED scAnnoX
+      # 21. INSTALL YOUR MODIFIED scAnnoX
       #
-      # IMPORTANT:
-      # This is YOUR modified Seurat 5-compatible copy.
+      # DO NOT DOWNLOAD THE OFFICIAL VERSION.
       #
-      # Actual path:
+      # Use the modified local copy:
       # files/external/scAnnoX
       # ============================================================
 
       - name: Install local modified scAnnoX
         run: |
-          test -f "files/external/scAnnoX/DESCRIPTION"
 
-          echo "Installing local modified scAnnoX..."
+          echo "========================================"
+          echo "Installing local modified scAnnoX"
+          echo "========================================"
+
+          if [ ! -f "files/external/scAnnoX/DESCRIPTION" ]; then
+
+            echo "ERROR:"
+            echo "files/external/scAnnoX/DESCRIPTION not found."
+
+            echo ""
+            echo "Repository contents:"
+            find files -maxdepth 4 -type f | sort || true
+
+            exit 1
+          fi
+
+          echo ""
+          echo "scAnnoX source:"
+          find files/external/scAnnoX \
+            -maxdepth 2 \
+            -type f \
+            | sort
+
+          echo ""
+          echo "Installing..."
 
           R CMD INSTALL \
             --no-multiarch \
             --with-keep.source \
             files/external/scAnnoX
 
+          echo ""
+          echo "Verifying installation..."
+
           Rscript -e '
-            if (!requireNamespace("scAnnoX", quietly = TRUE)) {
-              stop("scAnnoX installation failed.")
+
+            if (!requireNamespace(
+              "scAnnoX",
+              quietly = TRUE
+            )) {
+              stop(
+                "scAnnoX installation failed."
+              )
             }
 
             cat(
               "scAnnoX ",
-              as.character(packageVersion("scAnnoX")),
+              as.character(
+                packageVersion("scAnnoX")
+              ),
               " installed successfully.\n",
               sep = ""
             )
@@ -717,22 +1154,33 @@ jobs:
 
 
       # ============================================================
-      # 22. VERIFY scAnnoX
+      # 22. VERIFY scAnnoX FUNCTIONS
       # ============================================================
 
       - name: Verify scAnnoX
         run: |
+
           Rscript - <<'EOF'
 
           library(scAnnoX)
 
-          cat("========================================\n")
-          cat("scAnnoX verification\n")
-          cat("========================================\n")
+          cat(
+            "========================================\n"
+          )
+
+          cat(
+            "scAnnoX verification\n"
+          )
+
+          cat(
+            "========================================\n\n"
+          )
 
           cat(
             "Version: ",
-            as.character(packageVersion("scAnnoX")),
+            as.character(
+              packageVersion("scAnnoX")
+            ),
             "\n",
             sep = ""
           )
@@ -765,36 +1213,64 @@ jobs:
           ]
 
           if (length(missing) > 0) {
-            cat("Missing scAnnoX functions:\n")
+
+            cat(
+              "Missing functions:\n"
+            )
+
             print(missing)
-            stop("scAnnoX verification failed.")
+
+            stop(
+              "scAnnoX verification failed."
+            )
           }
 
-          cat("\nAll expected scAnnoX functions are available.\n")
+          cat(
+            "\nAll expected scAnnoX functions are available.\n"
+          )
 
-          cat("\nAvailable annotation methods:\n")
-          print(listToolMethods())
+          cat(
+            "\nAvailable annotation methods:\n"
+          )
+
+          print(
+            listToolMethods()
+          )
 
           EOF
 
 
       # ============================================================
-      # 23. CHECK INTEGRATED OBJECT
+      # 23. CHECK EXISTING INTEGRATED OBJECT
       #
-      # We deliberately DO NOT rerun scripts 01-07.
+      # The workflow starts HERE.
+      # Scripts 01-07 are NOT rerun.
       # ============================================================
 
-      - name: Check existing integrated object
+      - name: Check integrated object
         run: |
+
+          echo "========================================"
+          echo "Checking integrated Seurat object"
+          echo "========================================"
+
           if [ ! -f "results/objects/05_integrated.rds" ]; then
-            echo "ERROR: results/objects/05_integrated.rds does not exist."
+
             echo ""
-            echo "The resume workflow expects the previous integration"
-            echo "workflow to have produced this object."
+            echo "ERROR:"
+            echo "results/objects/05_integrated.rds not found."
+            echo ""
+
+            echo "Available RDS files:"
+            find results -type f \
+              \( -name "*.rds" -o -name "*.RDS" \) \
+              | sort || true
+
             exit 1
           fi
 
-          ls -lh results/objects/05_integrated.rds
+          ls -lh \
+            results/objects/05_integrated.rds
 
 
       # ============================================================
@@ -803,7 +1279,13 @@ jobs:
 
       - name: Run scAnnoX annotation
         run: |
-          Rscript scripts/08_annotation_scAnnoX.R
+
+          echo "========================================"
+          echo "Running scAnnoX annotation"
+          echo "========================================"
+
+          Rscript \
+            scripts/08_annotation_scAnnoX.R
 
 
       # ============================================================
@@ -812,16 +1294,28 @@ jobs:
 
       - name: Compare annotations
         run: |
-          Rscript scripts/09_compare_annotations.R
+
+          echo "========================================"
+          echo "Comparing annotations"
+          echo "========================================"
+
+          Rscript \
+            scripts/09_compare_annotations.R
 
 
       # ============================================================
       # 26. DIFFERENTIAL EXPRESSION
       # ============================================================
 
-      - name: Run differential expression
+      - name: Differential expression
         run: |
-          Rscript scripts/10_differential_expression.R
+
+          echo "========================================"
+          echo "Differential expression"
+          echo "========================================"
+
+          Rscript \
+            scripts/10_differential_expression.R
 
 
       # ============================================================
@@ -830,50 +1324,79 @@ jobs:
 
       - name: Generate final figures
         run: |
-          Rscript scripts/11_final_figures.R
+
+          echo "========================================"
+          echo "Generating final figures"
+          echo "========================================"
+
+          Rscript \
+            scripts/11_final_figures.R
 
 
       # ============================================================
-      # 28. SHOW GENERATED FILES
+      # 28. DISPLAY RESULTS
       # ============================================================
 
-      - name: Show generated results
+      - name: Display generated files
         run: |
+
+          echo ""
           echo "========================================"
           echo "RESULTS"
           echo "========================================"
 
-          find results -type f | sort || true
+          find results \
+            -type f \
+            | sort || true
 
           echo ""
           echo "========================================"
           echo "FIGURES"
           echo "========================================"
 
-          find figures -type f | sort || true
+          find figures \
+            -type f \
+            | sort || true
 
           echo ""
           echo "========================================"
           echo "DOCS"
           echo "========================================"
 
-          find docs -type f | sort || true
+          find docs \
+            -type f \
+            | sort || true
 
 
       # ============================================================
       # 29. COMMIT RESULTS
       # ============================================================
 
-      - name: Commit generated results
+      - name: Commit results
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add results figures docs
+          git config \
+            user.name \
+            "github-actions[bot]"
+
+          git config \
+            user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            results \
+            figures \
+            docs
 
           if git diff --cached --quiet; then
+
             echo "No new results to commit."
+
           else
-            git commit -m "Resume AML scAnnoX annotation and downstream analysis"
+
+            git commit \
+              -m "Resume AML scAnnoX annotation and downstream analysis"
+
             git push
+
           fi
