@@ -228,56 +228,86 @@ jobs:
       # 9. INSTALL scAnnoX
       # ============================================================
 
-      - name: Check scAnnoX dependencies
-        run: |
-          Rscript -e '
-          desc <- read.dcf(
-            "files/external/scAnnoX/DESCRIPTION"
-          )
-
-          cat("scAnnoX package:", desc[1, "Package"], "\n")
-          cat("scAnnoX version:", desc[1, "Version"], "\n\n")
-
-          cat("Depends:\n")
-          cat(desc[1, "Depends"], "\n\n")
-
-          cat("Imports:\n")
-          cat(desc[1, "Imports"], "\n")
-          '
-
 
       - name: Install scAnnoX
         run: |
-          echo "Installing scAnnoX from local source"
+          echo "Checking scAnnoX source..."
+
+          test -f files/external/scAnnoX/DESCRIPTION
+
+          echo ""
+          echo "Original DESCRIPTION:"
+          cat files/external/scAnnoX/DESCRIPTION
+
+          echo ""
+          echo "Installing CRAN/Bioconductor dependencies..."
 
           Rscript -e '
-          options(
-            repos = c(CRAN = "https://cloud.r-project.org")
+          options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+          cran_pkgs <- c(
+            "Seurat",
+            "HGNChelper",
+            "devtools",
+            "scCATCH",
+            "scmap",
+            "CelliD",
+            "SCINA"
           )
 
-          package_path <- "files/external/scAnnoX"
-
-          if (!file.exists(file.path(package_path, "DESCRIPTION"))) {
-            stop("scAnnoX DESCRIPTION not found")
-          }
-
-          cat("Installing local scAnnoX package...\n")
-
-          system2(
-            "R",
-            c(
-              "CMD",
-              "INSTALL",
-              "--no-multiarch",
-              "--with-keep.source",
-              shQuote(package_path)
+          missing <- cran_pkgs[
+            !vapply(
+              cran_pkgs,
+              requireNamespace,
+              logical(1),
+              quietly = TRUE
             )
-          )
+          ]
 
-          cat("Checking installation...\n")
+          if (length(missing) > 0) {
+            cat(
+              "Installing missing packages:",
+              paste(missing, collapse = ", "),
+              "\n"
+            )
 
+            install.packages(
+              missing,
+              dependencies = TRUE
+            )
+          }
+          '
+
+          echo ""
+          echo "Installing CHETAH..."
+
+          Rscript -e '
+          if (!requireNamespace("CHETAH", quietly = TRUE)) {
+            BiocManager::install(
+              "CHETAH",
+              ask = FALSE,
+              update = FALSE
+            )
+          }
+          '
+
+          echo ""
+          echo "Installing local scAnnoX..."
+
+          R CMD INSTALL \
+            --no-multiarch \
+            --with-keep.source \
+            files/external/scAnnoX
+
+      # ============================================================
+      # 10. TEST scAnnoX
+      # ============================================================
+
+      - name: Test scAnnoX
+        run: |
+          Rscript -e '
           if (!requireNamespace("scAnnoX", quietly = TRUE)) {
-            stop("scAnnoX installation failed")
+            stop("scAnnoX installation failed.")
           }
 
           cat(
@@ -288,35 +318,6 @@ jobs:
 
           cat("scAnnoX installed successfully.\n")
           '
-      # ============================================================
-      # 10. TEST scAnnoX
-      # ============================================================
-
-      - name: Test scAnnoX
-        run: |
-          Rscript -e '
-          cat("Installed packages matching scAnnoX:\n")
-          print(installed.packages()[grep(
-            "scAnnoX",
-            rownames(installed.packages()),
-            ignore.case = TRUE
-          ), , drop = FALSE])
-
-          cat("\nTesting package namespace...\n")
-
-          if (!requireNamespace("scAnnoX", quietly = FALSE)) {
-            stop("scAnnoX installation/import failed.")
-          }
-
-          cat(
-            "scAnnoX version:",
-            as.character(packageVersion("scAnnoX")),
-            "\n"
-          )
-
-          cat("scAnnoX loaded successfully.\n")
-          '
-
       # ============================================================
       # 11. DOWNLOAD DATASET
       # ============================================================
