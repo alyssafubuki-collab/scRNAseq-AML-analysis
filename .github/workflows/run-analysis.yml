@@ -234,31 +234,23 @@ jobs:
 
           cat("scPred loaded successfully.\n")
           '
-
       # ============================================================
       # 10. INSTALL scAnnoX
       #
-      # scAnnoX is stored locally at:
+      # scAnnoX has an outdated DESCRIPTION declaring several
+      # annotation packages and devtools as mandatory dependencies.
       #
-      # files/external/scAnnoX/
+      # We keep the original scAnnoX source in the repository,
+      # but remove devtools from runtime dependencies because it is
+      # only an installation tool.
       #
-      # --no-deps is used because the original scAnnoX DESCRIPTION
-      # declares multiple historical annotation packages as
-      # mandatory dependencies.
+      # The actual annotation packages used by scAnnoX are installed
+      # explicitly below.
       # ============================================================
 
-      - name: Install scAnnoX
+      - name: Install scAnnoX dependencies
         run: |
-          echo "Checking scAnnoX source..."
-
-          test -f files/external/scAnnoX/DESCRIPTION
-
-          echo ""
-          echo "scAnnoX DESCRIPTION:"
-          cat files/external/scAnnoX/DESCRIPTION
-
-          echo ""
-          echo "Installing available CRAN dependencies..."
+          echo "Installing scAnnoX dependencies..."
 
           Rscript -e '
           options(
@@ -268,12 +260,9 @@ jobs:
           )
 
           cran_pkgs <- c(
-            "Seurat",
             "HGNChelper",
             "devtools",
-            "scCATCH",
-            "scmap",
-            "CelliD",
+            "scSorter",
             "SCINA"
           )
 
@@ -289,7 +278,7 @@ jobs:
           if (length(missing) > 0) {
 
             cat(
-              "Installing missing packages:",
+              "Installing:",
               paste(missing, collapse = ", "),
               "\n"
             )
@@ -301,8 +290,36 @@ jobs:
 
           } else {
 
-            cat(
-              "All requested CRAN dependencies are already installed.\n"
+            cat("All CRAN dependencies already installed.\n")
+
+          }
+          '
+
+          echo ""
+          echo "Installing scmap..."
+
+          Rscript -e '
+          if (!requireNamespace("scmap", quietly = TRUE)) {
+
+            BiocManager::install(
+              "scmap",
+              ask = FALSE,
+              update = FALSE
+            )
+
+          }
+          '
+
+          echo ""
+          echo "Installing CelliD..."
+
+          Rscript -e '
+          if (!requireNamespace("CelliD", quietly = TRUE)) {
+
+            BiocManager::install(
+              "CelliD",
+              ask = FALSE,
+              update = FALSE
             )
 
           }
@@ -312,10 +329,7 @@ jobs:
           echo "Installing CHETAH..."
 
           Rscript -e '
-          if (!requireNamespace(
-            "CHETAH",
-            quietly = TRUE
-          )) {
+          if (!requireNamespace("CHETAH", quietly = TRUE)) {
 
             BiocManager::install(
               "CHETAH",
@@ -327,28 +341,99 @@ jobs:
           '
 
           echo ""
+          echo "Installing scibetR..."
+
+          Rscript -e '
+          if (!requireNamespace("scibetR", quietly = TRUE)) {
+
+            remotes::install_github(
+              "zwj-tina/scibetR",
+              upgrade = "never"
+            )
+
+          }
+          '
+
+      # ============================================================
+      # 10b. PATCH LOCAL scAnnoX DESCRIPTION
+      #
+      # devtools is not required to run scAnnoX.
+      # It is only required to install it from GitHub.
+      #
+      # We therefore remove it from Depends before installation.
+      # ============================================================
+
+      - name: Patch scAnnoX DESCRIPTION
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("files/external/scAnnoX/DESCRIPTION")
+
+          text = path.read_text()
+
+          old = """Depends:
+          \tR (>= 4.0.0),
+          \tSeurat,
+          \tdplyr,
+          \tHGNChelper,
+          \tdevtools
+          """
+
+          new = """Depends:
+          \tR (>= 4.0.0),
+          \tSeurat,
+          \tdplyr,
+          \tHGNChelper
+          """
+
+          if old not in text:
+              raise SystemExit(
+                  "Expected scAnnoX DESCRIPTION block was not found."
+              )
+
+          text = text.replace(old, new)
+
+          path.write_text(text)
+
+          print("scAnnoX DESCRIPTION patched successfully.")
+          PY
+
+          echo ""
+          echo "Patched DESCRIPTION:"
+          cat files/external/scAnnoX/DESCRIPTION
+
+      # ============================================================
+      # 10c. INSTALL LOCAL scAnnoX
+      # ============================================================
+
+      - name: Install local scAnnoX
+        run: |
+          echo "Checking scAnnoX source..."
+
+          test -f files/external/scAnnoX/DESCRIPTION
+          test -f files/external/scAnnoX/NAMESPACE
+
+          echo ""
           echo "Installing local scAnnoX..."
 
           R CMD INSTALL \
             --no-multiarch \
             --with-keep.source \
-            --no-deps \
             files/external/scAnnoX
 
       # ============================================================
-      # 11. TEST scAnnoX
+      # 10d. TEST scAnnoX
       # ============================================================
 
       - name: Test scAnnoX
         run: |
           Rscript -e '
-          cat(
-            "Checking scAnnoX installation...\n"
-          )
+          cat("Checking scAnnoX installation...\n")
 
           if (!requireNamespace(
             "scAnnoX",
-            quietly = FALSE
+            quietly = TRUE
           )) {
 
             stop(
@@ -363,11 +448,39 @@ jobs:
             "\n"
           )
 
+          cat("scAnnoX loaded successfully.\n")
+
+          required_functions <- c(
+            "autoAnnoTools",
+            "annoResult",
+            "findMarkerToolsForSc"
+          )
+
+          missing <- required_functions[
+            !vapply(
+              required_functions,
+              exists,
+              logical(1),
+              where = asNamespace("scAnnoX"),
+              inherits = FALSE
+            )
+          ]
+
+          if (length(missing) > 0) {
+
+            stop(
+              "Missing scAnnoX functions: ",
+              paste(missing, collapse = ", ")
+            )
+
+          }
+
           cat(
-            "scAnnoX loaded successfully.\n"
+            "Required scAnnoX functions available: ",
+            paste(required_functions, collapse = ", "),
+            "\n"
           )
           '
-
       # ============================================================
       # 12. DOWNLOAD DATASET
       # ============================================================
