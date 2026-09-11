@@ -228,32 +228,66 @@ jobs:
       # 9. INSTALL scAnnoX
       # ============================================================
 
+      - name: Check scAnnoX dependencies
+        run: |
+          Rscript -e '
+          desc <- read.dcf(
+            "files/external/scAnnoX/DESCRIPTION"
+          )
+
+          cat("scAnnoX package:", desc[1, "Package"], "\n")
+          cat("scAnnoX version:", desc[1, "Version"], "\n\n")
+
+          cat("Depends:\n")
+          cat(desc[1, "Depends"], "\n\n")
+
+          cat("Imports:\n")
+          cat(desc[1, "Imports"], "\n")
+          '
+
+
       - name: Install scAnnoX
         run: |
-          echo "Checking scAnnoX source..."
-          ls -la files/external/scAnnoX
-          echo ""
-          echo "DESCRIPTION:"
-          cat files/external/scAnnoX/DESCRIPTION
-          echo ""
+          echo "Installing scAnnoX from local source"
 
           Rscript -e '
           options(
             repos = c(CRAN = "https://cloud.r-project.org")
           )
 
+          package_path <- "files/external/scAnnoX"
+
+          if (!file.exists(file.path(package_path, "DESCRIPTION"))) {
+            stop("scAnnoX DESCRIPTION not found")
+          }
+
           cat("Installing local scAnnoX package...\n")
 
-          remotes::install_local(
-            "files/external/scAnnoX",
-            dependencies = TRUE,
-            upgrade = "never",
-            force = TRUE
+          system2(
+            "R",
+            c(
+              "CMD",
+              "INSTALL",
+              "--no-multiarch",
+              "--with-keep.source",
+              shQuote(package_path)
+            )
           )
 
-          cat("Installation command completed.\n")
-          '
+          cat("Checking installation...\n")
 
+          if (!requireNamespace("scAnnoX", quietly = TRUE)) {
+            stop("scAnnoX installation failed")
+          }
+
+          cat(
+            "scAnnoX version:",
+            as.character(packageVersion("scAnnoX")),
+            "\n"
+          )
+
+          cat("scAnnoX installed successfully.\n")
+          '
       # ============================================================
       # 10. TEST scAnnoX
       # ============================================================
