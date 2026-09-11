@@ -70,7 +70,7 @@ jobs:
           Rscript -e '
           install.packages(
             "BiocManager",
-            repos="https://cloud.r-project.org"
+            repos = "https://cloud.r-project.org"
           )
           '
 
@@ -92,7 +92,7 @@ jobs:
               "Matrix",
               "remotes"
             ),
-            repos="https://cloud.r-project.org"
+            repos = "https://cloud.r-project.org"
           )
           '
 
@@ -110,8 +110,8 @@ jobs:
               "scuttle",
               "SummarizedExperiment"
             ),
-            ask=FALSE,
-            update=FALSE
+            ask = FALSE,
+            update = FALSE
           )
           '
 
@@ -119,8 +119,8 @@ jobs:
       # 7. INSTALL scPred DEPENDENCIES
       #
       # scPred uses the legacy HarmonyMatrix API.
-      # Current Harmony 2.x no longer exports HarmonyMatrix.
-      # Therefore Harmony 1.2.4 is installed explicitly.
+      # Current Harmony versions no longer export HarmonyMatrix.
+      # Therefore Harmony 1.2.4 is installed explicitly below.
       # ============================================================
 
       - name: Install scPred dependencies
@@ -134,13 +134,13 @@ jobs:
               "kernlab",
               "pROC"
             ),
-            repos="https://cloud.r-project.org",
-            dependencies=TRUE
+            repos = "https://cloud.r-project.org",
+            dependencies = TRUE
           )
           '
 
-       # ============================================================
-      # 7b. INSTALL COMPATIBLE HARMONY VERSION
+      # ============================================================
+      # 7b. INSTALL HARMONY DEPENDENCY
       # ============================================================
 
       - name: Install Harmony dependencies
@@ -148,9 +148,13 @@ jobs:
           Rscript -e '
           install.packages(
             "RhpcBLASctl",
-            repos="https://cloud.r-project.org"
+            repos = "https://cloud.r-project.org"
           )
           '
+
+      # ============================================================
+      # 7c. INSTALL COMPATIBLE HARMONY VERSION
+      # ============================================================
 
       - name: Install Harmony 1.2.4
         run: |
@@ -169,7 +173,9 @@ jobs:
           library(harmony)
 
           if (!"HarmonyMatrix" %in% getNamespaceExports("harmony")) {
-            stop("HarmonyMatrix is not exported by installed Harmony.")
+            stop(
+              "HarmonyMatrix is not exported by installed Harmony."
+            )
           }
 
           cat(
@@ -183,6 +189,11 @@ jobs:
 
       # ============================================================
       # 8. INSTALL scPred
+      #
+      # Do NOT use remotes::install_github().
+      # GitHub authentication caused HTTP 401 errors.
+      # The public archive is downloaded with curl and installed
+      # locally with R CMD INSTALL.
       # ============================================================
 
       - name: Install scPred
@@ -207,7 +218,7 @@ jobs:
             scPred-src
 
       # ============================================================
-      # TEST scPred
+      # 9. TEST scPred
       # ============================================================
 
       - name: Test scPred
@@ -223,11 +234,18 @@ jobs:
 
           cat("scPred loaded successfully.\n")
           '
-          
-      # ============================================================
-      # 9. INSTALL scAnnoX
-      # ============================================================
 
+      # ============================================================
+      # 10. INSTALL scAnnoX
+      #
+      # scAnnoX is stored locally at:
+      #
+      # files/external/scAnnoX/
+      #
+      # --no-deps is used because the original scAnnoX DESCRIPTION
+      # declares multiple historical annotation packages as
+      # mandatory dependencies.
+      # ============================================================
 
       - name: Install scAnnoX
         run: |
@@ -236,14 +254,18 @@ jobs:
           test -f files/external/scAnnoX/DESCRIPTION
 
           echo ""
-          echo "Original DESCRIPTION:"
+          echo "scAnnoX DESCRIPTION:"
           cat files/external/scAnnoX/DESCRIPTION
 
           echo ""
-          echo "Installing CRAN/Bioconductor dependencies..."
+          echo "Installing available CRAN dependencies..."
 
           Rscript -e '
-          options(repos = c(CRAN = "https://cloud.r-project.org"))
+          options(
+            repos = c(
+              CRAN = "https://cloud.r-project.org"
+            )
+          )
 
           cran_pkgs <- c(
             "Seurat",
@@ -265,6 +287,7 @@ jobs:
           ]
 
           if (length(missing) > 0) {
+
             cat(
               "Installing missing packages:",
               paste(missing, collapse = ", "),
@@ -275,6 +298,13 @@ jobs:
               missing,
               dependencies = TRUE
             )
+
+          } else {
+
+            cat(
+              "All requested CRAN dependencies are already installed.\n"
+            )
+
           }
           '
 
@@ -282,12 +312,17 @@ jobs:
           echo "Installing CHETAH..."
 
           Rscript -e '
-          if (!requireNamespace("CHETAH", quietly = TRUE)) {
+          if (!requireNamespace(
+            "CHETAH",
+            quietly = TRUE
+          )) {
+
             BiocManager::install(
               "CHETAH",
               ask = FALSE,
               update = FALSE
             )
+
           }
           '
 
@@ -297,17 +332,29 @@ jobs:
           R CMD INSTALL \
             --no-multiarch \
             --with-keep.source \
+            --no-deps \
             files/external/scAnnoX
 
       # ============================================================
-      # 10. TEST scAnnoX
+      # 11. TEST scAnnoX
       # ============================================================
 
       - name: Test scAnnoX
         run: |
           Rscript -e '
-          if (!requireNamespace("scAnnoX", quietly = TRUE)) {
-            stop("scAnnoX installation failed.")
+          cat(
+            "Checking scAnnoX installation...\n"
+          )
+
+          if (!requireNamespace(
+            "scAnnoX",
+            quietly = FALSE
+          )) {
+
+            stop(
+              "scAnnoX installation/import failed."
+            )
+
           }
 
           cat(
@@ -316,10 +363,13 @@ jobs:
             "\n"
           )
 
-          cat("scAnnoX installed successfully.\n")
+          cat(
+            "scAnnoX loaded successfully.\n"
+          )
           '
+
       # ============================================================
-      # 11. DOWNLOAD DATASET
+      # 12. DOWNLOAD DATASET
       # ============================================================
 
       - name: Run dataset download
@@ -327,7 +377,7 @@ jobs:
           Rscript scripts/01_download_GSE145410.R
 
       # ============================================================
-      # 12. IMPORT + QC
+      # 13. IMPORT + QC
       # ============================================================
 
       - name: Run import and QC
@@ -335,7 +385,7 @@ jobs:
           Rscript scripts/02_import_and_QC.R
 
       # ============================================================
-      # 13. NORMALIZATION + HVG
+      # 14. NORMALIZATION + HVG
       # ============================================================
 
       - name: Run normalization and HVG
@@ -343,7 +393,7 @@ jobs:
           Rscript scripts/03_normalization_HVG.R
 
       # ============================================================
-      # 14. PCA + CLUSTERING + UMAP
+      # 15. PCA + CLUSTERING + UMAP
       # ============================================================
 
       - name: Run PCA clustering UMAP
@@ -351,7 +401,7 @@ jobs:
           Rscript scripts/04_PCA_clustering_UMAP.R
 
       # ============================================================
-      # 15. SEURAT v5 CCA INTEGRATION
+      # 16. SEURAT v5 CCA INTEGRATION
       # ============================================================
 
       - name: Run Seurat integration
@@ -359,7 +409,7 @@ jobs:
           Rscript scripts/05_Seurat5_integration.R
 
       # ============================================================
-      # 16. SINGLE-R ANNOTATION
+      # 17. SINGLE-R ANNOTATION
       # ============================================================
 
       - name: Run SingleR annotation
@@ -367,7 +417,7 @@ jobs:
           Rscript scripts/06_annotation_SingleR.R
 
       # ============================================================
-      # 17. scPred ANNOTATION
+      # 18. scPred ANNOTATION
       # ============================================================
 
       - name: Run scPred annotation
@@ -375,7 +425,7 @@ jobs:
           Rscript scripts/07_annotation_scPred.R
 
       # ============================================================
-      # 18. scAnnoX ANNOTATION
+      # 19. scAnnoX ANNOTATION
       # ============================================================
 
       - name: Run scAnnoX annotation
@@ -383,7 +433,7 @@ jobs:
           Rscript scripts/08_annotation_scAnnoX.R
 
       # ============================================================
-      # 19. COMPARE ANNOTATION METHODS
+      # 20. COMPARE ANNOTATION METHODS
       # ============================================================
 
       - name: Compare annotation methods
@@ -391,7 +441,7 @@ jobs:
           Rscript scripts/09_compare_annotations.R
 
       # ============================================================
-      # 20. DIFFERENTIAL EXPRESSION
+      # 21. DIFFERENTIAL EXPRESSION
       # ============================================================
 
       - name: Differential expression
@@ -399,7 +449,7 @@ jobs:
           Rscript scripts/10_differential_expression.R
 
       # ============================================================
-      # 21. FINAL FIGURES
+      # 22. FINAL FIGURES
       # ============================================================
 
       - name: Generate final figures
@@ -407,7 +457,7 @@ jobs:
           Rscript scripts/11_final_figures.R
 
       # ============================================================
-      # 22. COMMIT RESULTS
+      # 23. COMMIT RESULTS
       # ============================================================
 
       - name: Commit analysis results
@@ -418,8 +468,14 @@ jobs:
           git add results/ docs/ figures/ 2>/dev/null || true
 
           if git diff --cached --quiet; then
+
             echo "No new results to commit."
+
           else
-            git commit -m "Run AML scRNA-seq analysis pipeline"
+
+            git commit \
+              -m "Run AML scRNA-seq analysis pipeline"
+
             git push
+
           fi
