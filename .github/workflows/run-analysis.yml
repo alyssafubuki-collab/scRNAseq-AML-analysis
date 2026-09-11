@@ -10,6 +10,7 @@ permissions:
   contents: write
 
 jobs:
+
   analysis:
 
     runs-on: ubuntu-latest
@@ -52,6 +53,7 @@ jobs:
             libcurl4-openssl-dev \
             libssl-dev \
             libxml2-dev \
+            libxml2 \
             libfontconfig1-dev \
             libfreetype6-dev \
             libpng-dev \
@@ -59,7 +61,9 @@ jobs:
             libtiff-dev \
             libharfbuzz-dev \
             libfribidi-dev \
-            libgit2-dev
+            libgit2-dev \
+            libglpk-dev \
+            libgsl-dev
 
       # ============================================================
       # 4. BIOCONDUCTOR
@@ -75,12 +79,18 @@ jobs:
           '
 
       # ============================================================
-      # 5. CRAN PACKAGES
+      # 5. CORE CRAN PACKAGES
       # ============================================================
 
-      - name: Install CRAN packages
+      - name: Install core CRAN packages
         run: |
           Rscript -e '
+          options(
+            repos = c(
+              CRAN = "https://cloud.r-project.org"
+            )
+          )
+
           install.packages(
             c(
               "Seurat",
@@ -90,17 +100,19 @@ jobs:
               "data.table",
               "patchwork",
               "Matrix",
-              "remotes"
+              "remotes",
+              "HGNChelper",
+              "future"
             ),
-            repos = "https://cloud.r-project.org"
+            dependencies = TRUE
           )
           '
 
       # ============================================================
-      # 6. BIOCONDUCTOR PACKAGES
+      # 6. CORE BIOCONDUCTOR PACKAGES
       # ============================================================
 
-      - name: Install Bioconductor packages
+      - name: Install core Bioconductor packages
         run: |
           Rscript -e '
           BiocManager::install(
@@ -108,7 +120,11 @@ jobs:
               "SingleR",
               "celldex",
               "scuttle",
-              "SummarizedExperiment"
+              "SummarizedExperiment",
+              "SingleCellExperiment",
+              "scmap",
+              "CelliD",
+              "CHETAH"
             ),
             ask = FALSE,
             update = FALSE
@@ -116,11 +132,7 @@ jobs:
           '
 
       # ============================================================
-      # 7. INSTALL scPred DEPENDENCIES
-      #
-      # scPred uses the legacy HarmonyMatrix API.
-      # Current Harmony versions no longer export HarmonyMatrix.
-      # Therefore Harmony 1.2.4 is installed explicitly below.
+      # 7. scPred DEPENDENCIES
       # ============================================================
 
       - name: Install scPred dependencies
@@ -140,7 +152,7 @@ jobs:
           '
 
       # ============================================================
-      # 7b. INSTALL HARMONY DEPENDENCY
+      # 8. HARMONY DEPENDENCY
       # ============================================================
 
       - name: Install Harmony dependencies
@@ -153,11 +165,14 @@ jobs:
           '
 
       # ============================================================
-      # 7c. INSTALL COMPATIBLE HARMONY VERSION
+      # 9. INSTALL HARMONY 1.2.4
+      #
+      # scPred requires the legacy HarmonyMatrix API.
       # ============================================================
 
       - name: Install Harmony 1.2.4
         run: |
+
           curl -L \
             --fail \
             --retry 3 \
@@ -188,16 +203,12 @@ jobs:
           '
 
       # ============================================================
-      # 8. INSTALL scPred
-      #
-      # Do NOT use remotes::install_github().
-      # GitHub authentication caused HTTP 401 errors.
-      # The public archive is downloaded with curl and installed
-      # locally with R CMD INSTALL.
+      # 10. INSTALL scPred
       # ============================================================
 
       - name: Install scPred
         run: |
+
           curl -L \
             --fail \
             --retry 3 \
@@ -218,7 +229,7 @@ jobs:
             scPred-src
 
       # ============================================================
-      # 9. TEST scPred
+      # 11. TEST scPred
       # ============================================================
 
       - name: Test scPred
@@ -234,41 +245,201 @@ jobs:
 
           cat("scPred loaded successfully.\n")
           '
+
       # ============================================================
-      # 10. INSTALL scAnnoX
+      # 12. INSTALL scAnnoX RUNTIME DEPENDENCIES
       #
-      # scAnnoX has an outdated DESCRIPTION declaring several
-      # annotation packages and devtools as mandatory dependencies.
-      #
-      # We keep the original scAnnoX source in the repository,
-      # but remove devtools from runtime dependencies because it is
-      # only an installation tool.
-      #
-      # The actual annotation packages used by scAnnoX are installed
-      # explicitly below.
+      # We install the actual annotation tools explicitly.
       # ============================================================
 
-      - name: Install scAnnoX dependencies
+      - name: Install scAnnoX runtime dependencies
         run: |
-          echo "Installing scAnnoX dependencies..."
+
+          echo "Checking scAnnoX dependencies..."
 
           Rscript -e '
-          options(
-            repos = c(
-              CRAN = "https://cloud.r-project.org"
-            )
-          )
-
-          cran_pkgs <- c(
+          required <- c(
+            "Seurat",
+            "dplyr",
             "HGNChelper",
-            "devtools",
+            "SingleCellExperiment",
+            "SingleR",
             "scSorter",
-            "SCINA"
+            "scCATCH",
+            "scibetR",
+            "CHETAH",
+            "scmap",
+            "CelliD",
+            "SCINA",
+            "future"
           )
 
-          missing <- cran_pkgs[
+          installed <- vapply(
+            required,
+            requireNamespace,
+            logical(1),
+            quietly = TRUE
+          )
+
+          cat(
+            "Already installed:\n"
+          )
+
+          print(
+            required[installed]
+          )
+
+          cat(
+            "\nMissing:\n"
+          )
+
+          print(
+            required[!installed]
+          )
+          '
+
+      # ============================================================
+      # 13. INSTALL scSorter
+      # ============================================================
+
+      - name: Install scSorter
+        run: |
+          Rscript -e '
+          if (!requireNamespace(
+            "scSorter",
+            quietly = TRUE
+          )) {
+
+            install.packages(
+              "scSorter",
+              repos = "https://cloud.r-project.org",
+              dependencies = TRUE
+            )
+
+          }
+          '
+
+      # ============================================================
+      # 14. INSTALL scCATCH
+      # ============================================================
+
+      - name: Install scCATCH
+        run: |
+          Rscript -e '
+          if (!requireNamespace(
+            "scCATCH",
+            quietly = TRUE
+          )) {
+
+            install.packages(
+              "scCATCH",
+              repos = "https://cloud.r-project.org",
+              dependencies = TRUE
+            )
+
+          }
+          '
+
+      # ============================================================
+      # 15. INSTALL SCINA
+      # ============================================================
+
+      - name: Install SCINA
+        run: |
+          Rscript -e '
+          if (!requireNamespace(
+            "SCINA",
+            quietly = TRUE
+          )) {
+
+            install.packages(
+              "SCINA",
+              repos = "https://cloud.r-project.org",
+              dependencies = TRUE
+            )
+
+          }
+          '
+
+      # ============================================================
+      # 16. INSTALL scibetR
+      #
+      # Direct GitHub archive download avoids GitHub authentication
+      # problems encountered with remotes::install_github().
+      # ============================================================
+
+      - name: Install scibetR
+        run: |
+
+          Rscript -e '
+          if (requireNamespace(
+            "scibetR",
+            quietly = TRUE
+          )) {
+
+            cat("scibetR already installed.\n")
+
+          } else {
+
+            cat("scibetR is not installed yet.\n")
+
+          }
+          '
+
+          if ! Rscript -e 'quit(status = ifelse(requireNamespace("scibetR", quietly = TRUE), 0, 1))'
+          then
+
+            echo "Downloading scibetR source..."
+
+            curl -L \
+              --fail \
+              --retry 3 \
+              -H "Authorization:" \
+              -H "X-GitHub-Api-Version:" \
+              "https://github.com/zwj-tina/scibetR/archive/refs/heads/master.tar.gz" \
+              -o scibetR.tar.gz
+
+            mkdir -p scibetR-src
+
+            tar -xzf scibetR.tar.gz \
+              --strip-components=1 \
+              -C scibetR-src
+
+            R CMD INSTALL \
+              --no-multiarch \
+              --with-keep.source \
+              scibetR-src
+
+          fi
+
+      # ============================================================
+      # 17. VERIFY ALL scAnnoX DEPENDENCIES
+      # ============================================================
+
+      - name: Verify scAnnoX dependencies
+        run: |
+
+          Rscript -e '
+
+          required <- c(
+            "Seurat",
+            "dplyr",
+            "HGNChelper",
+            "SingleCellExperiment",
+            "SingleR",
+            "scSorter",
+            "scCATCH",
+            "scibetR",
+            "CHETAH",
+            "scmap",
+            "CelliD",
+            "SCINA",
+            "future"
+          )
+
+          missing <- required[
             !vapply(
-              cran_pkgs,
+              required,
               requireNamespace,
               logical(1),
               quietly = TRUE
@@ -277,138 +448,90 @@ jobs:
 
           if (length(missing) > 0) {
 
-            cat(
-              "Installing:",
-              paste(missing, collapse = ", "),
-              "\n"
-            )
-
-            install.packages(
-              missing,
-              dependencies = TRUE
-            )
-
-          } else {
-
-            cat("All CRAN dependencies already installed.\n")
-
-          }
-          '
-
-          echo ""
-          echo "Installing scmap..."
-
-          Rscript -e '
-          if (!requireNamespace("scmap", quietly = TRUE)) {
-
-            BiocManager::install(
-              "scmap",
-              ask = FALSE,
-              update = FALSE
+            stop(
+              "Missing scAnnoX dependencies: ",
+              paste(
+                missing,
+                collapse = ", "
+              )
             )
 
           }
-          '
 
-          echo ""
-          echo "Installing CelliD..."
+          cat(
+            "All scAnnoX runtime dependencies are available.\n"
+          )
 
-          Rscript -e '
-          if (!requireNamespace("CelliD", quietly = TRUE)) {
-
-            BiocManager::install(
-              "CelliD",
-              ask = FALSE,
-              update = FALSE
-            )
-
-          }
-          '
-
-          echo ""
-          echo "Installing CHETAH..."
-
-          Rscript -e '
-          if (!requireNamespace("CHETAH", quietly = TRUE)) {
-
-            BiocManager::install(
-              "CHETAH",
-              ask = FALSE,
-              update = FALSE
-            )
-
-          }
-          '
-
-          echo ""
-          echo "Installing scibetR..."
-
-          Rscript -e '
-          if (!requireNamespace("scibetR", quietly = TRUE)) {
-
-            remotes::install_github(
-              "zwj-tina/scibetR",
-              upgrade = "never"
-            )
-
-          }
           '
 
       # ============================================================
-      # 10b. PATCH LOCAL scAnnoX DESCRIPTION
+      # 18. PATCH scAnnoX DESCRIPTION
       #
-      # devtools is not required to run scAnnoX.
-      # It is only required to install it from GitHub.
+      # IMPORTANT:
       #
-      # We therefore remove it from Depends before installation.
+      # The original DESCRIPTION declares all historical annotation
+      # packages as mandatory package-installation dependencies.
+      #
+      # We already installed the runtime packages explicitly.
+      #
+      # We therefore remove the dependency declarations from the
+      # local DESCRIPTION so R CMD INSTALL does not perform another
+      # dependency-resolution step.
+      #
+      # NAMESPACE only exports scAnnoX functions.
       # ============================================================
 
       - name: Patch scAnnoX DESCRIPTION
         run: |
+
           python3 - <<'PY'
+
           from pathlib import Path
 
-          path = Path("files/external/scAnnoX/DESCRIPTION")
+          path = Path(
+              "files/external/scAnnoX/DESCRIPTION"
+          )
 
           text = path.read_text()
 
-          old = """Depends:
-          \tR (>= 4.0.0),
-          \tSeurat,
-          \tdplyr,
-          \tHGNChelper,
-          \tdevtools
+          start = text.index("Depends:")
+          imports_start = text.index("Imports:")
+          suggests_start = text.index("Suggests:")
+
+          new_depends = """Depends:
+          \tR (>= 4.0.0)
           """
 
-          new = """Depends:
-          \tR (>= 4.0.0),
-          \tSeurat,
-          \tdplyr,
-          \tHGNChelper
+          new_imports = """Imports:
+          \tdplyr
           """
 
-          if old not in text:
-              raise SystemExit(
-                  "Expected scAnnoX DESCRIPTION block was not found."
-              )
-
-          text = text.replace(old, new)
+          text = (
+              text[:start]
+              + new_depends
+              + new_imports
+              + text[suggests_start:]
+          )
 
           path.write_text(text)
 
-          print("scAnnoX DESCRIPTION patched successfully.")
+          print(
+              "scAnnoX DESCRIPTION patched successfully."
+          )
+
           PY
 
           echo ""
-          echo "Patched DESCRIPTION:"
+          echo "Final scAnnoX DESCRIPTION:"
           cat files/external/scAnnoX/DESCRIPTION
 
       # ============================================================
-      # 10c. INSTALL LOCAL scAnnoX
+      # 19. INSTALL LOCAL scAnnoX
       # ============================================================
 
       - name: Install local scAnnoX
         run: |
+
           echo "Checking scAnnoX source..."
 
           test -f files/external/scAnnoX/DESCRIPTION
@@ -423,13 +546,17 @@ jobs:
             files/external/scAnnoX
 
       # ============================================================
-      # 10d. TEST scAnnoX
+      # 20. TEST scAnnoX
       # ============================================================
 
       - name: Test scAnnoX
         run: |
+
           Rscript -e '
-          cat("Checking scAnnoX installation...\n")
+
+          cat(
+            "Checking scAnnoX installation...\n"
+          )
 
           if (!requireNamespace(
             "scAnnoX",
@@ -444,11 +571,11 @@ jobs:
 
           cat(
             "scAnnoX version:",
-            as.character(packageVersion("scAnnoX")),
+            as.character(
+              packageVersion("scAnnoX")
+            ),
             "\n"
           )
-
-          cat("scAnnoX loaded successfully.\n")
 
           required_functions <- c(
             "autoAnnoTools",
@@ -470,19 +597,31 @@ jobs:
 
             stop(
               "Missing scAnnoX functions: ",
-              paste(missing, collapse = ", ")
+              paste(
+                missing,
+                collapse = ", "
+              )
             )
 
           }
 
           cat(
             "Required scAnnoX functions available: ",
-            paste(required_functions, collapse = ", "),
+            paste(
+              required_functions,
+              collapse = ", "
+            ),
             "\n"
           )
+
+          cat(
+            "scAnnoX loaded successfully.\n"
+          )
+
           '
+
       # ============================================================
-      # 12. DOWNLOAD DATASET
+      # 21. DOWNLOAD DATASET
       # ============================================================
 
       - name: Run dataset download
@@ -490,7 +629,7 @@ jobs:
           Rscript scripts/01_download_GSE145410.R
 
       # ============================================================
-      # 13. IMPORT + QC
+      # 22. IMPORT + QC
       # ============================================================
 
       - name: Run import and QC
@@ -498,7 +637,7 @@ jobs:
           Rscript scripts/02_import_and_QC.R
 
       # ============================================================
-      # 14. NORMALIZATION + HVG
+      # 23. NORMALIZATION + HVG
       # ============================================================
 
       - name: Run normalization and HVG
@@ -506,7 +645,7 @@ jobs:
           Rscript scripts/03_normalization_HVG.R
 
       # ============================================================
-      # 15. PCA + CLUSTERING + UMAP
+      # 24. PCA + CLUSTERING + UMAP
       # ============================================================
 
       - name: Run PCA clustering UMAP
@@ -514,7 +653,7 @@ jobs:
           Rscript scripts/04_PCA_clustering_UMAP.R
 
       # ============================================================
-      # 16. SEURAT v5 CCA INTEGRATION
+      # 25. SEURAT v5 CCA INTEGRATION
       # ============================================================
 
       - name: Run Seurat integration
@@ -522,7 +661,7 @@ jobs:
           Rscript scripts/05_Seurat5_integration.R
 
       # ============================================================
-      # 17. SINGLE-R ANNOTATION
+      # 26. SINGLE-R ANNOTATION
       # ============================================================
 
       - name: Run SingleR annotation
@@ -530,7 +669,7 @@ jobs:
           Rscript scripts/06_annotation_SingleR.R
 
       # ============================================================
-      # 18. scPred ANNOTATION
+      # 27. scPred ANNOTATION
       # ============================================================
 
       - name: Run scPred annotation
@@ -538,7 +677,7 @@ jobs:
           Rscript scripts/07_annotation_scPred.R
 
       # ============================================================
-      # 19. scAnnoX ANNOTATION
+      # 28. scAnnoX ANNOTATION
       # ============================================================
 
       - name: Run scAnnoX annotation
@@ -546,7 +685,7 @@ jobs:
           Rscript scripts/08_annotation_scAnnoX.R
 
       # ============================================================
-      # 20. COMPARE ANNOTATION METHODS
+      # 29. COMPARE ANNOTATIONS
       # ============================================================
 
       - name: Compare annotation methods
@@ -554,7 +693,7 @@ jobs:
           Rscript scripts/09_compare_annotations.R
 
       # ============================================================
-      # 21. DIFFERENTIAL EXPRESSION
+      # 30. DIFFERENTIAL EXPRESSION
       # ============================================================
 
       - name: Differential expression
@@ -562,7 +701,7 @@ jobs:
           Rscript scripts/10_differential_expression.R
 
       # ============================================================
-      # 22. FINAL FIGURES
+      # 31. FINAL FIGURES
       # ============================================================
 
       - name: Generate final figures
@@ -570,17 +709,27 @@ jobs:
           Rscript scripts/11_final_figures.R
 
       # ============================================================
-      # 23. COMMIT RESULTS
+      # 32. COMMIT RESULTS
       # ============================================================
 
       - name: Commit analysis results
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add results/ docs/ figures/ 2>/dev/null || true
+          git config user.name \
+            "github-actions[bot]"
 
-          if git diff --cached --quiet; then
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            results/ \
+            docs/ \
+            figures/ \
+            files/external/scAnnoX/DESCRIPTION \
+            2>/dev/null || true
+
+          if git diff --cached --quiet
+          then
 
             echo "No new results to commit."
 
