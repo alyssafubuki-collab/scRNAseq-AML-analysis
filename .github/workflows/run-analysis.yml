@@ -28,6 +28,7 @@ jobs:
         with:
           fetch-depth: 0
 
+
       # ============================================================
       # 2. R SETUP
       # ============================================================
@@ -41,12 +42,14 @@ jobs:
       - name: Setup Pandoc
         uses: r-lib/actions/setup-pandoc@v2
 
+
       # ============================================================
       # 3. SYSTEM DEPENDENCIES
       # ============================================================
 
       - name: Install system dependencies
         run: |
+
           sudo apt-get update
 
           sudo apt-get install -y \
@@ -65,25 +68,14 @@ jobs:
             libglpk-dev \
             libgsl-dev
 
+
       # ============================================================
       # 4. BIOCONDUCTOR
       # ============================================================
 
       - name: Install BiocManager
         run: |
-          Rscript -e '
-          install.packages(
-            "BiocManager",
-            repos = "https://cloud.r-project.org"
-          )
-          '
 
-      # ============================================================
-      # 5. CORE CRAN PACKAGES
-      # ============================================================
-
-      - name: Install core CRAN packages
-        run: |
           Rscript -e '
           options(
             repos = c(
@@ -91,22 +83,102 @@ jobs:
             )
           )
 
-          install.packages(
-            c(
-              "Seurat",
-              "SeuratObject",
-              "ggplot2",
-              "dplyr",
-              "data.table",
-              "patchwork",
-              "Matrix",
-              "remotes",
-              "HGNChelper",
-              "future"
+          if (!requireNamespace(
+            "BiocManager",
+            quietly = TRUE
+          )) {
+
+            install.packages(
+              "BiocManager",
+              repos = "https://cloud.r-project.org"
+            )
+
+          }
+
+          cat(
+            "BiocManager version:",
+            as.character(
+              packageVersion("BiocManager")
             ),
-            dependencies = TRUE
+            "\n"
           )
           '
+
+
+      # ============================================================
+      # 5. CORE CRAN PACKAGES
+      #
+      # IMPORTANT:
+      # Do NOT use dependencies = TRUE here.
+      #
+      # This avoids installing a huge number of optional packages
+      # such as DESeq2, monocle, rtracklayer, etc.
+      # ============================================================
+
+      - name: Install core CRAN packages
+        run: |
+
+          Rscript -e '
+
+          options(
+            repos = c(
+              CRAN = "https://cloud.r-project.org"
+            )
+          )
+
+          cran <- c(
+            "Seurat",
+            "SeuratObject",
+            "ggplot2",
+            "dplyr",
+            "data.table",
+            "patchwork",
+            "Matrix",
+            "remotes",
+            "HGNChelper",
+            "future"
+          )
+
+          missing <- cran[
+            !vapply(
+              cran,
+              requireNamespace,
+              logical(1),
+              quietly = TRUE
+            )
+          ]
+
+          if (length(missing) > 0) {
+
+            cat(
+              "Installing missing CRAN packages:\n"
+            )
+
+            print(missing)
+
+            install.packages(
+              missing,
+              repos = "https://cloud.r-project.org",
+              dependencies = c(
+                "Depends",
+                "Imports",
+                "LinkingTo"
+              )
+            )
+
+          } else {
+
+            cat(
+              "All core CRAN packages already installed.\n"
+            )
+
+          }
+
+          cat(
+            "Core CRAN installation completed.\n"
+          )
+          '
+
 
       # ============================================================
       # 6. CORE BIOCONDUCTOR PACKAGES
@@ -114,22 +186,53 @@ jobs:
 
       - name: Install core Bioconductor packages
         run: |
+
           Rscript -e '
-          BiocManager::install(
-            c(
-              "SingleR",
-              "celldex",
-              "scuttle",
-              "SummarizedExperiment",
-              "SingleCellExperiment",
-              "scmap",
-              "CelliD",
-              "CHETAH"
-            ),
-            ask = FALSE,
-            update = FALSE
+
+          options(
+            repos = c(
+              CRAN = "https://cloud.r-project.org"
+            )
+          )
+
+          packages <- c(
+            "SingleR",
+            "celldex",
+            "scuttle",
+            "SummarizedExperiment",
+            "SingleCellExperiment"
+          )
+
+          missing <- packages[
+            !vapply(
+              packages,
+              requireNamespace,
+              logical(1),
+              quietly = TRUE
+            )
+          ]
+
+          if (length(missing) > 0) {
+
+            cat(
+              "Installing Bioconductor packages:\n"
+            )
+
+            print(missing)
+
+            BiocManager::install(
+              missing,
+              ask = FALSE,
+              update = FALSE
+            )
+
+          }
+
+          cat(
+            "Core Bioconductor installation completed.\n"
           )
           '
+
 
       # ============================================================
       # 7. scPred DEPENDENCIES
@@ -137,37 +240,80 @@ jobs:
 
       - name: Install scPred dependencies
         run: |
+
           Rscript -e '
-          install.packages(
-            c(
-              "ggbeeswarm",
-              "MLmetrics",
-              "caret",
-              "kernlab",
-              "pROC"
-            ),
-            repos = "https://cloud.r-project.org",
-            dependencies = TRUE
+
+          options(
+            repos = c(
+              CRAN = "https://cloud.r-project.org"
+            )
+          )
+
+          packages <- c(
+            "ggbeeswarm",
+            "MLmetrics",
+            "caret",
+            "kernlab",
+            "pROC"
+          )
+
+          missing <- packages[
+            !vapply(
+              packages,
+              requireNamespace,
+              logical(1),
+              quietly = TRUE
+            )
+          ]
+
+          if (length(missing) > 0) {
+
+            install.packages(
+              missing,
+              repos = "https://cloud.r-project.org",
+              dependencies = c(
+                "Depends",
+                "Imports",
+                "LinkingTo"
+              )
+            )
+
+          }
+
+          cat(
+            "scPred dependencies installed.\n"
           )
           '
+
 
       # ============================================================
       # 8. HARMONY DEPENDENCY
       # ============================================================
 
-      - name: Install Harmony dependencies
+      - name: Install Harmony dependency
         run: |
+
           Rscript -e '
-          install.packages(
+
+          if (!requireNamespace(
             "RhpcBLASctl",
-            repos = "https://cloud.r-project.org"
-          )
+            quietly = TRUE
+          )) {
+
+            install.packages(
+              "RhpcBLASctl",
+              repos = "https://cloud.r-project.org"
+            )
+
+          }
+
           '
+
 
       # ============================================================
       # 9. INSTALL HARMONY 1.2.4
       #
-      # scPred requires the legacy HarmonyMatrix API.
+      # scPred requires HarmonyMatrix.
       # ============================================================
 
       - name: Install Harmony 1.2.4
@@ -185,22 +331,31 @@ jobs:
             harmony_1.2.4.tar.gz
 
           Rscript -e '
+
           library(harmony)
 
           if (!"HarmonyMatrix" %in% getNamespaceExports("harmony")) {
+
             stop(
               "HarmonyMatrix is not exported by installed Harmony."
             )
+
           }
 
           cat(
             "Harmony version:",
-            as.character(packageVersion("harmony")),
+            as.character(
+              packageVersion("harmony")
+            ),
             "\n"
           )
 
-          cat("HarmonyMatrix available: TRUE\n")
+          cat(
+            "HarmonyMatrix available: TRUE\n"
+          )
+
           '
+
 
       # ============================================================
       # 10. INSTALL scPred
@@ -217,6 +372,8 @@ jobs:
             "https://github.com/powellgenomicslab/scPred/archive/refs/heads/master.tar.gz" \
             -o scPred.tar.gz
 
+          rm -rf scPred-src
+
           mkdir -p scPred-src
 
           tar -xzf scPred.tar.gz \
@@ -228,36 +385,386 @@ jobs:
             --with-keep.source \
             scPred-src
 
+
       # ============================================================
       # 11. TEST scPred
       # ============================================================
 
       - name: Test scPred
         run: |
+
           Rscript -e '
+
+          if (!requireNamespace(
+            "scPred",
+            quietly = TRUE
+          )) {
+
+            stop(
+              "scPred installation failed."
+            )
+
+          }
+
           library(scPred)
 
           cat(
             "scPred version:",
-            as.character(packageVersion("scPred")),
+            as.character(
+              packageVersion("scPred")
+            ),
             "\n"
           )
 
-          cat("scPred loaded successfully.\n")
+          cat(
+            "scPred loaded successfully.\n"
+          )
+
           '
 
+
       # ============================================================
-      # 12. INSTALL scAnnoX RUNTIME DEPENDENCIES
-      #
-      # We install the actual annotation tools explicitly.
+      # 12. INSTALL scSorter
       # ============================================================
 
-      - name: Install scAnnoX runtime dependencies
+      - name: Install scSorter
         run: |
 
-          echo "Checking scAnnoX dependencies..."
+          Rscript -e '
+
+          options(
+            repos = c(
+              CRAN = "https://cloud.r-project.org"
+            )
+          )
+
+          if (!requireNamespace(
+            "scSorter",
+            quietly = TRUE
+          )) {
+
+            install.packages(
+              "scSorter",
+              repos = "https://cloud.r-project.org",
+              dependencies = c(
+                "Depends",
+                "Imports",
+                "LinkingTo"
+              )
+            )
+
+          }
+
+          if (!requireNamespace(
+            "scSorter",
+            quietly = TRUE
+          )) {
+
+            stop(
+              "scSorter installation failed."
+            )
+
+          }
+
+          cat(
+            "scSorter version:",
+            as.character(
+              packageVersion("scSorter")
+            ),
+            "\n"
+          )
+
+          '
+
+
+      # ============================================================
+      # 13. INSTALL scCATCH
+      # ============================================================
+
+      - name: Install scCATCH
+        run: |
 
           Rscript -e '
+
+          options(
+            repos = c(
+              CRAN = "https://cloud.r-project.org"
+            )
+          )
+
+          if (!requireNamespace(
+            "scCATCH",
+            quietly = TRUE
+          )) {
+
+            install.packages(
+              "scCATCH",
+              repos = "https://cloud.r-project.org",
+              dependencies = c(
+                "Depends",
+                "Imports",
+                "LinkingTo"
+              )
+            )
+
+          }
+
+          if (!requireNamespace(
+            "scCATCH",
+            quietly = TRUE
+          )) {
+
+            stop(
+              "scCATCH installation failed."
+            )
+
+          }
+
+          cat(
+            "scCATCH installed successfully.\n"
+          )
+
+          '
+
+
+      # ============================================================
+      # 14. INSTALL scmap
+      # ============================================================
+
+      - name: Install scmap
+        run: |
+
+          Rscript -e '
+
+          if (!requireNamespace(
+            "scmap",
+            quietly = TRUE
+          )) {
+
+            BiocManager::install(
+              "scmap",
+              ask = FALSE,
+              update = FALSE
+            )
+
+          }
+
+          if (!requireNamespace(
+            "scmap",
+            quietly = TRUE
+          )) {
+
+            stop(
+              "scmap installation failed."
+            )
+
+          }
+
+          cat(
+            "scmap installed successfully.\n"
+          )
+
+          '
+
+
+      # ============================================================
+      # 15. INSTALL CelliD
+      # ============================================================
+
+      - name: Install CelliD
+        run: |
+
+          Rscript -e '
+
+          if (!requireNamespace(
+            "CelliD",
+            quietly = TRUE
+          )) {
+
+            BiocManager::install(
+              "CelliD",
+              ask = FALSE,
+              update = FALSE
+            )
+
+          }
+
+          if (!requireNamespace(
+            "CelliD",
+            quietly = TRUE
+          )) {
+
+            stop(
+              "CelliD installation failed."
+            )
+
+          }
+
+          cat(
+            "CelliD installed successfully.\n"
+          )
+
+          '
+
+
+      # ============================================================
+      # 16. INSTALL CHETAH
+      # ============================================================
+
+      - name: Install CHETAH
+        run: |
+
+          Rscript -e '
+
+          if (!requireNamespace(
+            "CHETAH",
+            quietly = TRUE
+          )) {
+
+            BiocManager::install(
+              "CHETAH",
+              ask = FALSE,
+              update = FALSE
+            )
+
+          }
+
+          if (!requireNamespace(
+            "CHETAH",
+            quietly = TRUE
+          )) {
+
+            stop(
+              "CHETAH installation failed."
+            )
+
+          }
+
+          cat(
+            "CHETAH installed successfully.\n"
+          )
+
+          '
+
+
+      # ============================================================
+      # 17. INSTALL SCINA
+      #
+      # SCINA is no longer installed from current CRAN.
+      #
+      # Use archived CRAN version 1.2.0.
+      # ============================================================
+
+      - name: Install SCINA from CRAN archive
+        run: |
+
+          if ! Rscript -e 'quit(status = ifelse(requireNamespace("SCINA", quietly = TRUE), 0, 1))'
+          then
+
+            echo "SCINA not installed."
+            echo "Installing archived SCINA 1.2.0..."
+
+            curl -L \
+              --fail \
+              --retry 3 \
+              "https://cran.r-project.org/src/contrib/Archive/SCINA/SCINA_1.2.0.tar.gz" \
+              -o SCINA_1.2.0.tar.gz
+
+            R CMD INSTALL \
+              --no-multiarch \
+              --with-keep.source \
+              SCINA_1.2.0.tar.gz
+
+          fi
+
+          Rscript -e '
+
+          if (!requireNamespace(
+            "SCINA",
+            quietly = TRUE
+          )) {
+
+            stop(
+              "SCINA installation failed."
+            )
+
+          }
+
+          cat(
+            "SCINA version:",
+            as.character(
+              packageVersion("SCINA")
+            ),
+            "\n"
+          )
+
+          '
+
+
+      # ============================================================
+      # 18. INSTALL scibetR
+      # ============================================================
+
+      - name: Install scibetR
+        run: |
+
+          if ! Rscript -e 'quit(status = ifelse(requireNamespace("scibetR", quietly = TRUE), 0, 1))'
+          then
+
+            echo "Downloading scibetR source..."
+
+            curl -L \
+              --fail \
+              --retry 3 \
+              -H "Authorization:" \
+              -H "X-GitHub-Api-Version:" \
+              "https://github.com/zwj-tina/scibetR/archive/refs/heads/master.tar.gz" \
+              -o scibetR.tar.gz
+
+            rm -rf scibetR-src
+
+            mkdir -p scibetR-src
+
+            tar -xzf scibetR.tar.gz \
+              --strip-components=1 \
+              -C scibetR-src
+
+            R CMD INSTALL \
+              --no-multiarch \
+              --with-keep.source \
+              scibetR-src
+
+          fi
+
+          Rscript -e '
+
+          if (!requireNamespace(
+            "scibetR",
+            quietly = TRUE
+          )) {
+
+            stop(
+              "scibetR installation failed."
+            )
+
+          }
+
+          cat(
+            "scibetR installed successfully.\n"
+          )
+
+          '
+
+
+      # ============================================================
+      # 19. VERIFY ALL scAnnoX RUNTIME DEPENDENCIES
+      # ============================================================
+
+      - name: Verify scAnnoX dependencies
+        run: |
+
+          Rscript -e '
+
           required <- c(
             "Seurat",
             "dplyr",
@@ -282,7 +789,7 @@ jobs:
           )
 
           cat(
-            "Already installed:\n"
+            "\nInstalled:\n"
           )
 
           print(
@@ -296,155 +803,8 @@ jobs:
           print(
             required[!installed]
           )
-          '
 
-      # ============================================================
-      # 13. INSTALL scSorter
-      # ============================================================
-
-      - name: Install scSorter
-        run: |
-          Rscript -e '
-          if (!requireNamespace(
-            "scSorter",
-            quietly = TRUE
-          )) {
-
-            install.packages(
-              "scSorter",
-              repos = "https://cloud.r-project.org",
-              dependencies = TRUE
-            )
-
-          }
-          '
-
-      # ============================================================
-      # 14. INSTALL scCATCH
-      # ============================================================
-
-      - name: Install scCATCH
-        run: |
-          Rscript -e '
-          if (!requireNamespace(
-            "scCATCH",
-            quietly = TRUE
-          )) {
-
-            install.packages(
-              "scCATCH",
-              repos = "https://cloud.r-project.org",
-              dependencies = TRUE
-            )
-
-          }
-          '
-
-      # ============================================================
-      # 15. INSTALL SCINA
-      # ============================================================
-
-      - name: Install SCINA
-        run: |
-          Rscript -e '
-          if (!requireNamespace(
-            "SCINA",
-            quietly = TRUE
-          )) {
-
-            install.packages(
-              "SCINA",
-              repos = "https://cloud.r-project.org",
-              dependencies = TRUE
-            )
-
-          }
-          '
-
-      # ============================================================
-      # 16. INSTALL scibetR
-      #
-      # Direct GitHub archive download avoids GitHub authentication
-      # problems encountered with remotes::install_github().
-      # ============================================================
-
-      - name: Install scibetR
-        run: |
-
-          Rscript -e '
-          if (requireNamespace(
-            "scibetR",
-            quietly = TRUE
-          )) {
-
-            cat("scibetR already installed.\n")
-
-          } else {
-
-            cat("scibetR is not installed yet.\n")
-
-          }
-          '
-
-          if ! Rscript -e 'quit(status = ifelse(requireNamespace("scibetR", quietly = TRUE), 0, 1))'
-          then
-
-            echo "Downloading scibetR source..."
-
-            curl -L \
-              --fail \
-              --retry 3 \
-              -H "Authorization:" \
-              -H "X-GitHub-Api-Version:" \
-              "https://github.com/zwj-tina/scibetR/archive/refs/heads/master.tar.gz" \
-              -o scibetR.tar.gz
-
-            mkdir -p scibetR-src
-
-            tar -xzf scibetR.tar.gz \
-              --strip-components=1 \
-              -C scibetR-src
-
-            R CMD INSTALL \
-              --no-multiarch \
-              --with-keep.source \
-              scibetR-src
-
-          fi
-
-      # ============================================================
-      # 17. VERIFY ALL scAnnoX DEPENDENCIES
-      # ============================================================
-
-      - name: Verify scAnnoX dependencies
-        run: |
-
-          Rscript -e '
-
-          required <- c(
-            "Seurat",
-            "dplyr",
-            "HGNChelper",
-            "SingleCellExperiment",
-            "SingleR",
-            "scSorter",
-            "scCATCH",
-            "scibetR",
-            "CHETAH",
-            "scmap",
-            "CelliD",
-            "SCINA",
-            "future"
-          )
-
-          missing <- required[
-            !vapply(
-              required,
-              requireNamespace,
-              logical(1),
-              quietly = TRUE
-            )
-          ]
+          missing <- required[!installed]
 
           if (length(missing) > 0) {
 
@@ -459,26 +819,18 @@ jobs:
           }
 
           cat(
-            "All scAnnoX runtime dependencies are available.\n"
+            "\nAll scAnnoX runtime dependencies are available.\n"
           )
 
           '
 
+
       # ============================================================
-      # 18. PATCH scAnnoX DESCRIPTION
+      # 20. PATCH LOCAL scAnnoX DESCRIPTION
       #
-      # IMPORTANT:
+      # This modification exists ONLY inside GitHub Actions.
       #
-      # The original DESCRIPTION declares all historical annotation
-      # packages as mandatory package-installation dependencies.
-      #
-      # We already installed the runtime packages explicitly.
-      #
-      # We therefore remove the dependency declarations from the
-      # local DESCRIPTION so R CMD INSTALL does not perform another
-      # dependency-resolution step.
-      #
-      # NAMESPACE only exports scAnnoX functions.
+      # It is NOT committed back to GitHub.
       # ============================================================
 
       - name: Patch scAnnoX DESCRIPTION
@@ -492,11 +844,25 @@ jobs:
               "files/external/scAnnoX/DESCRIPTION"
           )
 
+          if not path.exists():
+
+              raise SystemExit(
+                  "scAnnoX DESCRIPTION not found."
+              )
+
           text = path.read_text()
 
-          start = text.index("Depends:")
-          imports_start = text.index("Imports:")
-          suggests_start = text.index("Suggests:")
+          start = text.index(
+              "Depends:"
+          )
+
+          imports_start = text.index(
+              "Imports:"
+          )
+
+          suggests_start = text.index(
+              "Suggests:"
+          )
 
           new_depends = """Depends:
           \tR (>= 4.0.0)
@@ -513,7 +879,9 @@ jobs:
               + text[suggests_start:]
           )
 
-          path.write_text(text)
+          path.write_text(
+              text
+          )
 
           print(
               "scAnnoX DESCRIPTION patched successfully."
@@ -522,11 +890,12 @@ jobs:
           PY
 
           echo ""
-          echo "Final scAnnoX DESCRIPTION:"
+          echo "Patched scAnnoX DESCRIPTION:"
           cat files/external/scAnnoX/DESCRIPTION
 
+
       # ============================================================
-      # 19. INSTALL LOCAL scAnnoX
+      # 21. INSTALL LOCAL scAnnoX
       # ============================================================
 
       - name: Install local scAnnoX
@@ -534,8 +903,11 @@ jobs:
 
           echo "Checking scAnnoX source..."
 
-          test -f files/external/scAnnoX/DESCRIPTION
-          test -f files/external/scAnnoX/NAMESPACE
+          test -f \
+            files/external/scAnnoX/DESCRIPTION
+
+          test -f \
+            files/external/scAnnoX/NAMESPACE
 
           echo ""
           echo "Installing local scAnnoX..."
@@ -545,8 +917,9 @@ jobs:
             --with-keep.source \
             files/external/scAnnoX
 
+
       # ============================================================
-      # 20. TEST scAnnoX
+      # 22. TEST scAnnoX
       # ============================================================
 
       - name: Test scAnnoX
@@ -568,6 +941,8 @@ jobs:
             )
 
           }
+
+          library(scAnnoX)
 
           cat(
             "scAnnoX version:",
@@ -620,96 +995,133 @@ jobs:
 
           '
 
+
       # ============================================================
-      # 21. DOWNLOAD DATASET
+      # 23. DOWNLOAD DATASET
       # ============================================================
 
       - name: Run dataset download
         run: |
-          Rscript scripts/01_download_GSE145410.R
+
+          Rscript \
+            scripts/01_download_GSE145410.R
+
 
       # ============================================================
-      # 22. IMPORT + QC
+      # 24. IMPORT + QC
       # ============================================================
 
       - name: Run import and QC
         run: |
-          Rscript scripts/02_import_and_QC.R
+
+          Rscript \
+            scripts/02_import_and_QC.R
+
 
       # ============================================================
-      # 23. NORMALIZATION + HVG
+      # 25. NORMALIZATION + HVG
       # ============================================================
 
       - name: Run normalization and HVG
         run: |
-          Rscript scripts/03_normalization_HVG.R
+
+          Rscript \
+            scripts/03_normalization_HVG.R
+
 
       # ============================================================
-      # 24. PCA + CLUSTERING + UMAP
+      # 26. PCA + CLUSTERING + UMAP
       # ============================================================
 
       - name: Run PCA clustering UMAP
         run: |
-          Rscript scripts/04_PCA_clustering_UMAP.R
+
+          Rscript \
+            scripts/04_PCA_clustering_UMAP.R
+
 
       # ============================================================
-      # 25. SEURAT v5 CCA INTEGRATION
+      # 27. SEURAT v5 CCA INTEGRATION
       # ============================================================
 
       - name: Run Seurat integration
         run: |
-          Rscript scripts/05_Seurat5_integration.R
+
+          Rscript \
+            scripts/05_Seurat5_integration.R
+
 
       # ============================================================
-      # 26. SINGLE-R ANNOTATION
+      # 28. SINGLE-R ANNOTATION
       # ============================================================
 
       - name: Run SingleR annotation
         run: |
-          Rscript scripts/06_annotation_SingleR.R
+
+          Rscript \
+            scripts/06_annotation_SingleR.R
+
 
       # ============================================================
-      # 27. scPred ANNOTATION
+      # 29. scPred ANNOTATION
       # ============================================================
 
       - name: Run scPred annotation
         run: |
-          Rscript scripts/07_annotation_scPred.R
+
+          Rscript \
+            scripts/07_annotation_scPred.R
+
 
       # ============================================================
-      # 28. scAnnoX ANNOTATION
+      # 30. scAnnoX ANNOTATION
       # ============================================================
 
       - name: Run scAnnoX annotation
         run: |
-          Rscript scripts/08_annotation_scAnnoX.R
+
+          Rscript \
+            scripts/08_annotation_scAnnoX.R
+
 
       # ============================================================
-      # 29. COMPARE ANNOTATIONS
+      # 31. COMPARE ANNOTATIONS
       # ============================================================
 
       - name: Compare annotation methods
         run: |
-          Rscript scripts/09_compare_annotations.R
+
+          Rscript \
+            scripts/09_compare_annotations.R
+
 
       # ============================================================
-      # 30. DIFFERENTIAL EXPRESSION
+      # 32. DIFFERENTIAL EXPRESSION
       # ============================================================
 
       - name: Differential expression
         run: |
-          Rscript scripts/10_differential_expression.R
+
+          Rscript \
+            scripts/10_differential_expression.R
+
 
       # ============================================================
-      # 31. FINAL FIGURES
+      # 33. FINAL FIGURES
       # ============================================================
 
       - name: Generate final figures
         run: |
-          Rscript scripts/11_final_figures.R
+
+          Rscript \
+            scripts/11_final_figures.R
+
 
       # ============================================================
-      # 32. COMMIT RESULTS
+      # 34. COMMIT RESULTS
+      #
+      # IMPORTANT:
+      # Do NOT commit the patched scAnnoX DESCRIPTION.
       # ============================================================
 
       - name: Commit analysis results
@@ -725,7 +1137,6 @@ jobs:
             results/ \
             docs/ \
             figures/ \
-            files/external/scAnnoX/DESCRIPTION \
             2>/dev/null || true
 
           if git diff --cached --quiet
