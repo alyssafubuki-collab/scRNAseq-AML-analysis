@@ -143,18 +143,16 @@ jobs:
           )
 
           packages <- c(
-            "Seurat",
-            "SeuratObject",
-            "dplyr",
-            "ggplot2",
-            "patchwork",
-            "HGNChelper",
-            "future",
-            "Matrix",
-            "data.table",
-            "R.utils",
-            "remotes",
-            "devtools"
+          "Seurat",
+          "SeuratObject",
+          "dplyr",
+          "ggplot2",
+          "patchwork",
+          "HGNChelper",
+          "future",
+          "Matrix",
+          "data.table",
+          "R.utils"
           )
 
           installed <- rownames(installed.packages())
