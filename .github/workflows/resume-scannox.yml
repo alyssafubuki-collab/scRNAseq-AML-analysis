@@ -43,8 +43,8 @@ jobs:
 
           sudo apt-get install -y \
             build-essential \
-            g++ \
             gcc \
+            g++ \
             gfortran \
             libcurl4-openssl-dev \
             libssl-dev \
@@ -65,7 +65,7 @@ jobs:
 
 
       # ============================================================
-      # 4. CRAN CONFIGURATION
+      # 4. CONFIGURE CRAN
       # ============================================================
 
       - name: Configure CRAN
@@ -103,6 +103,7 @@ jobs:
               "BiocManager",
               quietly = TRUE
             )) {
+
               install.packages(
                 "BiocManager",
                 dependencies = c(
@@ -163,7 +164,7 @@ jobs:
 
             if (length(missing) > 0) {
 
-              cat("Installing:\n")
+              cat("Installing missing core packages:\n")
               print(missing)
 
               install.packages(
@@ -186,7 +187,7 @@ jobs:
       # 7. BIOCONDUCTOR SINGLE-CELL PACKAGES
       # ============================================================
 
-      - name: Install Bioconductor packages
+      - name: Install Bioconductor single-cell packages
         run: |
           Rscript -e '
             options(
@@ -213,13 +214,12 @@ jobs:
 
 
       # ============================================================
-      # 8. FORCE C++14
+      # 8. C++14 CONFIGURATION
       #
-      # IMPORTANT:
-      # This step occurs BEFORE CelliD installation.
+      # Must happen BEFORE CelliD installation.
       # ============================================================
 
-      - name: Configure C++14 compilation
+      - name: Configure C++14
         run: |
 
           echo "========================================"
@@ -239,7 +239,7 @@ jobs:
           cat "${HOME}/.R/Makevars"
 
           echo ""
-          echo "===== Compiler ====="
+          echo "===== g++ ====="
           which g++
           g++ --version
 
@@ -251,9 +251,7 @@ jobs:
           R CMD config CXX14STD
 
           echo ""
-          echo "========================================"
-          echo "Testing C++14 compiler"
-          echo "========================================"
+          echo "===== Testing C++14 ====="
 
           cat > /tmp/test_cpp14.cpp <<'EOF'
           #include <iostream>
@@ -278,14 +276,14 @@ jobs:
           /tmp/test_cpp14
 
           echo ""
-          echo "C++14 compiler test passed."
+          echo "C++14 test passed."
 
 
       # ============================================================
-      # 9. RCPP + RCPPARMADILLO
+      # 9. Rcpp + RcppArmadillo
       # ============================================================
 
-      - name: Install Rcpp dependencies
+      - name: Install Rcpp and RcppArmadillo
         env:
           CXXFLAGS: "-std=gnu++14"
           PKG_CXXFLAGS: "-std=gnu++14"
@@ -353,55 +351,197 @@ jobs:
 
       # ============================================================
       # 10. scPred DEPENDENCIES
+      #
+      # caret is explicitly installed and verified.
       # ============================================================
 
       - name: Install scPred dependencies
         run: |
-          Rscript -e '
-            options(
-              repos = c(
-                CRAN = "https://cloud.r-project.org"
+
+          echo "========================================"
+          echo "Installing scPred dependencies"
+          echo "========================================"
+
+          Rscript - <<'EOF'
+
+          options(
+            repos = c(
+              CRAN = "https://cloud.r-project.org"
+            )
+          )
+
+          packages <- c(
+            "harmony",
+            "ggbeeswarm",
+            "MLmetrics",
+            "caret",
+            "kernlab",
+            "pROC"
+          )
+
+          installed <- rownames(
+            installed.packages()
+          )
+
+          missing <- setdiff(
+            packages,
+            installed
+          )
+
+          cat("Missing packages:\n")
+          print(missing)
+
+          if (length(missing) > 0) {
+
+            install.packages(
+              missing,
+              dependencies = c(
+                "Depends",
+                "Imports",
+                "LinkingTo"
               )
             )
+          }
 
-            packages <- c(
-              "harmony",
-              "ggbeeswarm",
-              "MLmetrics",
-              "caret",
-              "kernlab",
-              "pROC"
-            )
+          cat(
+            "\nVerifying scPred dependencies...\n\n"
+          )
 
-            installed <- rownames(
-              installed.packages()
-            )
+          failed <- character(0)
 
-            missing <- setdiff(
-              packages,
-              installed
-            )
+          for (pkg in packages) {
 
-            if (length(missing) > 0) {
+            if (
+              !requireNamespace(
+                pkg,
+                quietly = TRUE
+              )
+            ) {
 
-              install.packages(
-                missing,
-                dependencies = c(
-                  "Depends",
-                  "Imports",
-                  "LinkingTo"
-                )
+              cat(
+                "FAILED: ",
+                pkg,
+                "\n",
+                sep = ""
+              )
+
+              failed <- c(
+                failed,
+                pkg
+              )
+
+            } else {
+
+              cat(
+                "OK: ",
+                pkg,
+                " ",
+                as.character(
+                  packageVersion(pkg)
+                ),
+                "\n",
+                sep = ""
               )
             }
+          }
+
+          if (length(failed) > 0) {
 
             cat(
-              "scPred dependencies ready.\n"
+              "\nPackages that failed:\n"
             )
-          '
+
+            print(failed)
+
+            stop(
+              "scPred dependencies are incomplete."
+            )
+          }
+
+          cat(
+            "\nAll scPred dependencies are available.\n"
+          )
+
+          EOF
 
 
       # ============================================================
-      # 11. HARMONY 1.2.4
+      # 11. VERIFY caret SPECIFICALLY
+      # ============================================================
+
+      - name: Verify caret
+        run: |
+
+          echo "========================================"
+          echo "Verifying caret"
+          echo "========================================"
+
+          Rscript - <<'EOF'
+
+          if (
+            !requireNamespace(
+              "caret",
+              quietly = TRUE
+            )
+          ) {
+
+            cat(
+              "ERROR: caret is NOT available.\n"
+            )
+
+            cat(
+              "\nInstalled packages containing 'caret':\n"
+            )
+
+            ip <- installed.packages()
+
+            matches <- grep(
+              "caret",
+              rownames(ip),
+              ignore.case = TRUE
+            )
+
+            if (length(matches) > 0) {
+
+              print(
+                ip[
+                  matches,
+                  c(
+                    "Package",
+                    "Version",
+                    "LibPath"
+                  ),
+                  drop = FALSE
+                ]
+              )
+            }
+
+            stop(
+              "caret is required before installing scPred."
+            )
+          }
+
+          cat(
+            "caret ",
+            as.character(
+              packageVersion("caret")
+            ),
+            " is available.\n",
+            sep = ""
+          )
+
+          cat(
+            "caret location: ",
+            find.package("caret"),
+            "\n",
+            sep = ""
+          )
+
+          EOF
+
+
+      # ============================================================
+      # 12. HARMONY 1.2.4
       #
       # scPred requires HarmonyMatrix().
       # ============================================================
@@ -409,18 +549,24 @@ jobs:
       - name: Install Harmony 1.2.4
         run: |
 
-          echo "Checking HarmonyMatrix..."
+          echo "========================================"
+          echo "Checking HarmonyMatrix"
+          echo "========================================"
 
           if Rscript -e '
-            if (!requireNamespace(
-              "harmony",
-              quietly = TRUE
-            )) {
+            if (
+              !requireNamespace(
+                "harmony",
+                quietly = TRUE
+              )
+            ) {
               quit(status = 1)
             }
 
-            if (!"HarmonyMatrix" %in%
-                getNamespaceExports("harmony")) {
+            if (
+              !"HarmonyMatrix" %in%
+              getNamespaceExports("harmony")
+            ) {
               quit(status = 1)
             }
 
@@ -449,85 +595,153 @@ jobs:
           fi
 
           Rscript -e '
-            library(harmony)
 
-            if (!"HarmonyMatrix" %in%
-                getNamespaceExports("harmony")) {
+            if (
+              !requireNamespace(
+                "harmony",
+                quietly = TRUE
+              )
+            ) {
+              stop(
+                "Harmony installation failed."
+              )
+            }
+
+            if (
+              !"HarmonyMatrix" %in%
+              getNamespaceExports("harmony")
+            ) {
               stop(
                 "HarmonyMatrix is not available."
               )
             }
 
             cat(
-              "HarmonyMatrix is available.\n"
+              "Harmony ",
+              as.character(
+                packageVersion("harmony")
+              ),
+              " ready.\n",
+              sep = ""
+            )
+
+            cat(
+              "HarmonyMatrix available.\n"
             )
           '
 
 
       # ============================================================
-      # 12. scPred
+      # 13. INSTALL scPred
       # ============================================================
 
       - name: Install scPred
+        env:
+          CXXFLAGS: "-std=gnu++14"
+          PKG_CXXFLAGS: "-std=gnu++14"
         run: |
 
-          if Rscript -e '
-            quit(
-              status = ifelse(
-                requireNamespace(
-                  "scPred",
-                  quietly = TRUE
-                ),
-                0,
-                1
-              )
+          echo "========================================"
+          echo "Installing scPred"
+          echo "========================================"
+
+          # --------------------------------------------------------
+          # Verify caret in the exact R session
+          # --------------------------------------------------------
+
+          Rscript - <<'EOF'
+
+          if (
+            !requireNamespace(
+              "caret",
+              quietly = TRUE
             )
-          '
-          then
+          ) {
 
-            echo "scPred already installed."
+            stop(
+              "caret is unavailable. scPred cannot be installed."
+            )
+          }
 
-          else
+          cat(
+            "caret detected: ",
+            as.character(
+              packageVersion("caret")
+            ),
+            "\n",
+            sep = ""
+          )
 
-            echo "Installing scPred..."
+          cat(
+            "caret path: ",
+            find.package("caret"),
+            "\n",
+            sep = ""
+          )
 
-            curl \
-              -L \
-              --fail \
-              --retry 3 \
-              "https://github.com/powellgenomicslab/scPred/archive/refs/heads/master.tar.gz" \
-              -o scPred.tar.gz
+          EOF
 
-            R CMD INSTALL \
-              --no-multiarch \
-              --with-keep.source \
-              scPred.tar.gz
+          # --------------------------------------------------------
+          # Download scPred
+          # --------------------------------------------------------
 
-          fi
+          echo ""
+          echo "Downloading scPred..."
 
-          Rscript -e '
-            if (!requireNamespace(
+          curl \
+            -L \
+            --fail \
+            --retry 3 \
+            "https://github.com/powellgenomicslab/scPred/archive/refs/heads/master.tar.gz" \
+            -o scPred.tar.gz
+
+          # --------------------------------------------------------
+          # Install
+          # --------------------------------------------------------
+
+          echo ""
+          echo "Installing scPred..."
+
+          R CMD INSTALL \
+            --no-multiarch \
+            --with-keep.source \
+            scPred.tar.gz
+
+          # --------------------------------------------------------
+          # Verify
+          # --------------------------------------------------------
+
+          echo ""
+          echo "Verifying scPred..."
+
+          Rscript - <<'EOF'
+
+          if (
+            !requireNamespace(
               "scPred",
               quietly = TRUE
-            )) {
-              stop(
-                "scPred installation failed."
-              )
-            }
-
-            cat(
-              "scPred ",
-              as.character(
-                packageVersion("scPred")
-              ),
-              " installed.\n",
-              sep = ""
             )
-          '
+          ) {
+
+            stop(
+              "scPred installation failed."
+            )
+          }
+
+          cat(
+            "scPred ",
+            as.character(
+              packageVersion("scPred")
+            ),
+            " installed successfully.\n",
+            sep = ""
+          )
+
+          EOF
 
 
       # ============================================================
-      # 13. scSorter
+      # 14. scSorter
       # ============================================================
 
       - name: Install scSorter
@@ -568,10 +782,13 @@ jobs:
           fi
 
           Rscript -e '
-            if (!requireNamespace(
-              "scSorter",
-              quietly = TRUE
-            )) {
+
+            if (
+              !requireNamespace(
+                "scSorter",
+                quietly = TRUE
+              )
+            ) {
               stop(
                 "scSorter installation failed."
               )
@@ -589,7 +806,7 @@ jobs:
 
 
       # ============================================================
-      # 14. scCATCH
+      # 15. scCATCH
       # ============================================================
 
       - name: Install scCATCH
@@ -603,10 +820,12 @@ jobs:
               )
             )
 
-            if (!requireNamespace(
-              "scCATCH",
-              quietly = TRUE
-            )) {
+            if (
+              !requireNamespace(
+                "scCATCH",
+                quietly = TRUE
+              )
+            ) {
 
               install.packages(
                 "scCATCH",
@@ -618,10 +837,12 @@ jobs:
               )
             }
 
-            if (!requireNamespace(
-              "scCATCH",
-              quietly = TRUE
-            )) {
+            if (
+              !requireNamespace(
+                "scCATCH",
+                quietly = TRUE
+              )
+            ) {
               stop(
                 "scCATCH installation failed."
               )
@@ -639,7 +860,7 @@ jobs:
 
 
       # ============================================================
-      # 15. scmap
+      # 16. scmap
       # ============================================================
 
       - name: Install scmap
@@ -647,10 +868,12 @@ jobs:
 
           Rscript -e '
 
-            if (!requireNamespace(
-              "scmap",
-              quietly = TRUE
-            )) {
+            if (
+              !requireNamespace(
+                "scmap",
+                quietly = TRUE
+              )
+            ) {
 
               BiocManager::install(
                 "scmap",
@@ -659,10 +882,12 @@ jobs:
               )
             }
 
-            if (!requireNamespace(
-              "scmap",
-              quietly = TRUE
-            )) {
+            if (
+              !requireNamespace(
+                "scmap",
+                quietly = TRUE
+              )
+            ) {
               stop(
                 "scmap installation failed."
               )
@@ -680,11 +905,9 @@ jobs:
 
 
       # ============================================================
-      # 16. CelliD
+      # 17. CelliD
       #
-      # C++14 is forced at BOTH:
-      # - ~/.R/Makevars
-      # - environment level
+      # C++14 is forced through Makevars + environment.
       # ============================================================
 
       - name: Install CelliD
@@ -699,7 +922,6 @@ jobs:
           echo "========================================"
 
           echo ""
-          echo "Environment:"
           echo "CXXFLAGS=${CXXFLAGS}"
           echo "PKG_CXXFLAGS=${PKG_CXXFLAGS}"
           echo "MAKEFLAGS=${MAKEFLAGS}"
@@ -735,14 +957,12 @@ jobs:
             sep = ""
           )
 
-          # --------------------------------------------------------
-          # Make sure Rcpp is available
-          # --------------------------------------------------------
-
-          if (!requireNamespace(
-            "Rcpp",
-            quietly = TRUE
-          )) {
+          if (
+            !requireNamespace(
+              "Rcpp",
+              quietly = TRUE
+            )
+          ) {
 
             install.packages(
               "Rcpp",
@@ -754,14 +974,12 @@ jobs:
             )
           }
 
-          # --------------------------------------------------------
-          # Make sure RcppArmadillo is available
-          # --------------------------------------------------------
-
-          if (!requireNamespace(
-            "RcppArmadillo",
-            quietly = TRUE
-          )) {
+          if (
+            !requireNamespace(
+              "RcppArmadillo",
+              quietly = TRUE
+            )
+          ) {
 
             install.packages(
               "RcppArmadillo",
@@ -773,14 +991,12 @@ jobs:
             )
           }
 
-          # --------------------------------------------------------
-          # Install CelliD
-          # --------------------------------------------------------
-
-          if (!requireNamespace(
-            "CelliD",
-            quietly = TRUE
-          )) {
+          if (
+            !requireNamespace(
+              "CelliD",
+              quietly = TRUE
+            )
+          ) {
 
             cat(
               "\nInstalling CelliD with C++14...\n\n"
@@ -794,14 +1010,12 @@ jobs:
             )
           }
 
-          # --------------------------------------------------------
-          # Verify
-          # --------------------------------------------------------
-
-          if (!requireNamespace(
-            "CelliD",
-            quietly = TRUE
-          )) {
+          if (
+            !requireNamespace(
+              "CelliD",
+              quietly = TRUE
+            )
+          ) {
 
             stop(
               "CelliD installation failed."
@@ -821,7 +1035,7 @@ jobs:
 
 
       # ============================================================
-      # 17. CHETAH
+      # 18. CHETAH
       # ============================================================
 
       - name: Install CHETAH
@@ -829,10 +1043,12 @@ jobs:
 
           Rscript -e '
 
-            if (!requireNamespace(
-              "CHETAH",
-              quietly = TRUE
-            )) {
+            if (
+              !requireNamespace(
+                "CHETAH",
+                quietly = TRUE
+              )
+            ) {
 
               BiocManager::install(
                 "CHETAH",
@@ -841,10 +1057,12 @@ jobs:
               )
             }
 
-            if (!requireNamespace(
-              "CHETAH",
-              quietly = TRUE
-            )) {
+            if (
+              !requireNamespace(
+                "CHETAH",
+                quietly = TRUE
+              )
+            ) {
               stop(
                 "CHETAH installation failed."
               )
@@ -862,7 +1080,7 @@ jobs:
 
 
       # ============================================================
-      # 18. SCINA
+      # 19. SCINA
       # ============================================================
 
       - name: Install SCINA
@@ -904,10 +1122,12 @@ jobs:
 
           Rscript -e '
 
-            if (!requireNamespace(
-              "SCINA",
-              quietly = TRUE
-            )) {
+            if (
+              !requireNamespace(
+                "SCINA",
+                quietly = TRUE
+              )
+            ) {
               stop(
                 "SCINA installation failed."
               )
@@ -925,7 +1145,7 @@ jobs:
 
 
       # ============================================================
-      # 19. scibetR
+      # 20. scibetR
       # ============================================================
 
       - name: Install scibetR
@@ -967,10 +1187,12 @@ jobs:
 
           Rscript -e '
 
-            if (!requireNamespace(
-              "scibetR",
-              quietly = TRUE
-            )) {
+            if (
+              !requireNamespace(
+                "scibetR",
+                quietly = TRUE
+              )
+            ) {
               stop(
                 "scibetR installation failed."
               )
@@ -988,7 +1210,7 @@ jobs:
 
 
       # ============================================================
-      # 20. VERIFY ALL DEPENDENCIES
+      # 21. VERIFY ALL scAnnoX DEPENDENCIES
       # ============================================================
 
       - name: Verify scAnnoX dependencies
@@ -1036,15 +1258,13 @@ jobs:
 
             if (available) {
 
-              version <- as.character(
-                packageVersion(pkg)
-              )
-
               cat(
                 "OK       ",
                 pkg,
                 " ",
-                version,
+                as.character(
+                  packageVersion(pkg)
+                ),
                 "\n",
                 sep = ""
               )
@@ -1086,12 +1306,10 @@ jobs:
 
 
       # ============================================================
-      # 21. INSTALL YOUR MODIFIED scAnnoX
+      # 22. INSTALL LOCAL MODIFIED scAnnoX
       #
-      # DO NOT DOWNLOAD THE OFFICIAL VERSION.
-      #
-      # Use the modified local copy:
-      # files/external/scAnnoX
+      # IMPORTANT:
+      # This is the user's modified Seurat 5-compatible copy.
       # ============================================================
 
       - name: Install local modified scAnnoX
@@ -1101,42 +1319,41 @@ jobs:
           echo "Installing local modified scAnnoX"
           echo "========================================"
 
-          if [ ! -f "files/external/scAnnoX/DESCRIPTION" ]; then
+          if [
+            ! -f "files/external/scAnnoX/DESCRIPTION"
+          ]; then
 
+            echo ""
             echo "ERROR:"
             echo "files/external/scAnnoX/DESCRIPTION not found."
 
             echo ""
-            echo "Repository contents:"
-            find files -maxdepth 4 -type f | sort || true
+            echo "Available files:"
+            find files \
+              -maxdepth 4 \
+              -type f \
+              | sort || true
 
             exit 1
           fi
 
           echo ""
-          echo "scAnnoX source:"
-          find files/external/scAnnoX \
-            -maxdepth 2 \
-            -type f \
-            | sort
-
-          echo ""
-          echo "Installing..."
+          echo "Installing from:"
+          echo "files/external/scAnnoX"
 
           R CMD INSTALL \
             --no-multiarch \
             --with-keep.source \
             files/external/scAnnoX
 
-          echo ""
-          echo "Verifying installation..."
-
           Rscript -e '
 
-            if (!requireNamespace(
-              "scAnnoX",
-              quietly = TRUE
-            )) {
+            if (
+              !requireNamespace(
+                "scAnnoX",
+                quietly = TRUE
+              )
+            ) {
               stop(
                 "scAnnoX installation failed."
               )
@@ -1154,7 +1371,7 @@ jobs:
 
 
       # ============================================================
-      # 22. VERIFY scAnnoX FUNCTIONS
+      # 23. VERIFY scAnnoX
       # ============================================================
 
       - name: Verify scAnnoX
@@ -1215,7 +1432,7 @@ jobs:
           if (length(missing) > 0) {
 
             cat(
-              "Missing functions:\n"
+              "Missing scAnnoX functions:\n"
             )
 
             print(missing)
@@ -1241,20 +1458,21 @@ jobs:
 
 
       # ============================================================
-      # 23. CHECK EXISTING INTEGRATED OBJECT
+      # 24. CHECK EXISTING INTEGRATED OBJECT
       #
-      # The workflow starts HERE.
-      # Scripts 01-07 are NOT rerun.
+      # Do NOT rerun scripts 01-07.
       # ============================================================
 
       - name: Check integrated object
         run: |
 
           echo "========================================"
-          echo "Checking integrated Seurat object"
+          echo "Checking integrated object"
           echo "========================================"
 
-          if [ ! -f "results/objects/05_integrated.rds" ]; then
+          if [
+            ! -f "results/objects/05_integrated.rds"
+          ]; then
 
             echo ""
             echo "ERROR:"
@@ -1262,8 +1480,13 @@ jobs:
             echo ""
 
             echo "Available RDS files:"
-            find results -type f \
-              \( -name "*.rds" -o -name "*.RDS" \) \
+            find results \
+              -type f \
+              \( \
+                -name "*.rds" \
+                -o \
+                -name "*.RDS" \
+              \) \
               | sort || true
 
             exit 1
@@ -1274,7 +1497,7 @@ jobs:
 
 
       # ============================================================
-      # 24. RUN scAnnoX
+      # 25. RUN scAnnoX
       # ============================================================
 
       - name: Run scAnnoX annotation
@@ -1289,7 +1512,7 @@ jobs:
 
 
       # ============================================================
-      # 25. COMPARE ANNOTATIONS
+      # 26. COMPARE ANNOTATIONS
       # ============================================================
 
       - name: Compare annotations
@@ -1304,7 +1527,7 @@ jobs:
 
 
       # ============================================================
-      # 26. DIFFERENTIAL EXPRESSION
+      # 27. DIFFERENTIAL EXPRESSION
       # ============================================================
 
       - name: Differential expression
@@ -1319,7 +1542,7 @@ jobs:
 
 
       # ============================================================
-      # 27. FINAL FIGURES
+      # 28. FINAL FIGURES
       # ============================================================
 
       - name: Generate final figures
@@ -1334,7 +1557,7 @@ jobs:
 
 
       # ============================================================
-      # 28. DISPLAY RESULTS
+      # 29. DISPLAY RESULTS
       # ============================================================
 
       - name: Display generated files
@@ -1369,7 +1592,7 @@ jobs:
 
 
       # ============================================================
-      # 29. COMMIT RESULTS
+      # 30. COMMIT RESULTS
       # ============================================================
 
       - name: Commit results
