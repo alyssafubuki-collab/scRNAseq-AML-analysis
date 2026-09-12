@@ -125,7 +125,6 @@ jobs:
           )
           EOF
 
-
       # ============================================================
       # 6. CORE CRAN PACKAGES
       # ============================================================
@@ -142,17 +141,20 @@ jobs:
             )
           )
 
+          options(
+            Ncpus = 2
+          )
+
           packages <- c(
-          "Seurat",
-          "SeuratObject",
-          "dplyr",
-          "ggplot2",
-          "patchwork",
-          "HGNChelper",
-          "future",
-          "Matrix",
-          "data.table",
-          "R.utils"
+            "SeuratObject",
+            "dplyr",
+            "ggplot2",
+            "patchwork",
+            "HGNChelper",
+            "future",
+            "Matrix",
+            "data.table",
+            "R.utils"
           )
 
           installed <- rownames(installed.packages())
@@ -163,6 +165,9 @@ jobs:
           )
 
           if (length(missing) > 0) {
+            cat("Installing core packages:\n")
+            print(missing)
+
             install.packages(
               missing,
               dependencies = c(
@@ -183,14 +188,134 @@ jobs:
           ]
 
           if (length(failed) > 0) {
+            cat("Missing core packages:\n")
             print(failed)
             stop("Core CRAN package installation failed.")
           }
 
-          cat("All core CRAN packages installed.\n")
+          cat("Core CRAN packages installed.\n")
           EOF
 
 
+      # ============================================================
+      # 6.b SEURAT WEB/GUI DEPENDENCIES
+      # ============================================================
+
+      - name: Install Seurat web dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          Rscript - <<'EOF'
+          options(
+            repos = c(
+              CRAN = "https://cloud.r-project.org"
+            )
+          )
+
+          options(
+            Ncpus = 2
+          )
+
+          packages <- c(
+            "fs",
+            "sass",
+            "bslib",
+            "rmarkdown",
+            "shiny",
+            "htmlwidgets",
+            "miniUI",
+            "plotly"
+          )
+
+          for (pkg in packages) {
+
+            cat(
+              "\n============================================================\n",
+              "Installing ",
+              pkg,
+              "\n",
+              "============================================================\n",
+              sep = ""
+            )
+
+            if (!requireNamespace(pkg, quietly = TRUE)) {
+
+              install.packages(
+                pkg,
+                dependencies = c(
+                  "Depends",
+                  "Imports",
+                  "LinkingTo"
+                )
+              )
+            }
+
+            if (!requireNamespace(pkg, quietly = TRUE)) {
+              stop(
+                paste0(
+                  "Installation failed for package: ",
+                  pkg
+                )
+              )
+            }
+
+            cat(
+              pkg,
+              " ",
+              as.character(packageVersion(pkg)),
+              " installed successfully.\n",
+              sep = ""
+            )
+          }
+
+          cat("\nAll Seurat web dependencies installed.\n")
+          EOF
+
+
+      # ============================================================
+      # 6.c SEURAT
+      # ============================================================
+
+      - name: Install Seurat
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          Rscript - <<'EOF'
+          options(
+            repos = c(
+              CRAN = "https://cloud.r-project.org"
+            )
+          )
+
+          options(
+            Ncpus = 2
+          )
+
+          if (!requireNamespace("Seurat", quietly = TRUE)) {
+
+            install.packages(
+              "Seurat",
+              dependencies = c(
+                "Depends",
+                "Imports",
+                "LinkingTo"
+              )
+            )
+          }
+
+          if (!requireNamespace("Seurat", quietly = TRUE)) {
+            stop("Seurat installation failed.")
+          }
+
+          cat(
+            "Seurat ",
+            as.character(packageVersion("Seurat")),
+            " installed successfully.\n",
+            sep = ""
+          )
+          EOF
       # ============================================================
       # 7. BIOCONDUCTOR
       # ============================================================
