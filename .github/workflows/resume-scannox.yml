@@ -36,7 +36,6 @@ jobs:
       # ============================================================
       # 3. SYSTEM DEPENDENCIES
       # ============================================================
-
       - name: Install system dependencies
         shell: bash
         run: |
@@ -66,9 +65,9 @@ jobs:
             libgsl-dev \
             libhdf5-dev \
             liblapack-dev \
-            libblas-dev
-
-
+            libblas-dev \
+            libuv1-dev
+            
       # ============================================================
       # 4. R CONFIGURATION
       # ============================================================
