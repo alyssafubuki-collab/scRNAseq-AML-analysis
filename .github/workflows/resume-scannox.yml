@@ -486,9 +486,13 @@ jobs:
       # 10. CARET
       # ============================================================
 
-
       - name: Install caret dependencies and caret
         shell: bash
+        env:
+          USE_SYSTEM_TZDB: "0"
+          TZDB_USE_SYSTEM_TZDB: "0"
+          CXXFLAGS: "-std=gnu++14"
+          PKG_CXXFLAGS: "-std=gnu++14"
         run: |
           set -euo pipefail
 
@@ -500,6 +504,13 @@ jobs:
           )
 
           options(Ncpus = 2)
+
+          Sys.setenv(
+            USE_SYSTEM_TZDB = "0",
+            TZDB_USE_SYSTEM_TZDB = "0",
+            CXXFLAGS = "-std=gnu++14",
+            PKG_CXXFLAGS = "-std=gnu++14"
+          )
 
           packages <- c(
             "tzdb",
