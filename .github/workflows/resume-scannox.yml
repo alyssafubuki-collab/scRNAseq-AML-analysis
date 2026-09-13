@@ -489,28 +489,34 @@ jobs:
       - name: Install caret dependencies and caret
         shell: bash
         env:
-          USE_SYSTEM_TZDB: "0"
-          TZDB_USE_SYSTEM_TZDB: "0"
           CXXFLAGS: "-std=gnu++14"
           PKG_CXXFLAGS: "-std=gnu++14"
         run: |
           set -euo pipefail
 
           Rscript - <<'EOF'
+          rspm <- Sys.getenv("RSPM")
+
+          if (!nzchar(rspm)) {
+            stop(
+              "RSPM is not configured. setup-r must provide RSPM before installing caret dependencies."
+            )
+          }
+
           options(
             repos = c(
-              CRAN = "https://cloud.r-project.org"
-            )
+              CRAN = rspm
+            ),
+            Ncpus = 2
           )
 
-          options(Ncpus = 2)
-
           Sys.setenv(
-            USE_SYSTEM_TZDB = "0",
-            TZDB_USE_SYSTEM_TZDB = "0",
             CXXFLAGS = "-std=gnu++14",
             PKG_CXXFLAGS = "-std=gnu++14"
           )
+
+          cat("Using CRAN repository: ", getOption("repos")["CRAN"], "\n", sep = "")
+          cat("RSPM: ", rspm, "\n", sep = "")
 
           packages <- c(
             "tzdb",
