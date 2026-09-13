@@ -1,4 +1,4 @@
-name: AML scRNA-seq full analysis
+name: AML scRNA-seq full analysis w/o scAnnoX
 
 on:
   workflow_dispatch:
