@@ -2,14 +2,13 @@
 # ============================================================
 # 00_install_packages.R
 #
-# Install packages required for the complete AML scRNA-seq
-# analysis workflow.
+# Installation of all packages required for the AML
+# scRNA-seq analysis workflow.
 #
-# Compatible with:
-#   R 4.4.x
-#   Seurat v5
-#   SingleR
-#   scPred
+# R 4.4.x
+# Seurat v5
+# SingleR
+# scPred
 #
 # scAnnoX is NOT used.
 # ============================================================
@@ -21,7 +20,7 @@ options(
 )
 
 # ============================================================
-# 1. CRAN PACKAGES
+# 1. CRAN
 # ============================================================
 
 cran_packages <- c(
@@ -43,45 +42,35 @@ for (pkg in cran_packages) {
 
   if (!requireNamespace(pkg, quietly = TRUE)) {
 
-    message("Installing CRAN package: ", pkg)
+    message("Installing: ", pkg)
 
     install.packages(
       pkg,
       dependencies = TRUE
     )
+
   } else {
 
-    message("Already installed: ", pkg)
+    message(
+      "Already installed: ",
+      pkg,
+      " ",
+      packageVersion(pkg)
+    )
   }
 }
 
 # ============================================================
-# 2. BIOCONDUCTOR
+# 2. BIOCMANAGER
 # ============================================================
 
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
 
-  message("Installing BiocManager...")
-
-  install.packages(
-    "BiocManager"
-  )
+  install.packages("BiocManager")
 }
 
-# Use the Bioconductor release compatible with R 4.4
-bioc_version <- "3.20"
-
-message("============================================================")
-message("Configuring Bioconductor ", bioc_version)
-message("============================================================")
-
-BiocManager::install(
-  version = bioc_version,
-  ask = FALSE
-)
-
 # ============================================================
-# 3. BIOCONDUCTOR PACKAGES
+# 3. BIOCONDUCTOR
 # ============================================================
 
 bioc_packages <- c(
@@ -105,15 +94,6 @@ BiocManager::install(
 # ============================================================
 # 4. HARMONY
 # ============================================================
-#
-# Harmony is required by scPred.
-#
-# IMPORTANT:
-# We explicitly disable GitHub credentials so that a stale
-# GitHub PAT cannot cause an HTTP 401 authentication error.
-#
-# The GitHub repository is public.
-# ============================================================
 
 message("============================================================")
 message("Installing Harmony")
@@ -121,28 +101,22 @@ message("============================================================")
 
 if (!requireNamespace("harmony", quietly = TRUE)) {
 
-  Sys.unsetenv("GITHUB_PAT")
-  Sys.unsetenv("GITHUB_TOKEN")
-
   remotes::install_github(
     "immunogenomics/harmony",
-    upgrade = "never",
     dependencies = TRUE,
-    auth_token = NULL
+    upgrade = "never"
   )
 
 } else {
 
-  message("Harmony already installed.")
+  message(
+    "Harmony already installed: ",
+    packageVersion("harmony")
+  )
 }
 
 # ============================================================
 # 5. SCPRED
-# ============================================================
-#
-# scPred is installed from its public GitHub repository.
-#
-# No personal GitHub PAT is required.
 # ============================================================
 
 message("============================================================")
@@ -151,27 +125,26 @@ message("============================================================")
 
 if (!requireNamespace("scPred", quietly = TRUE)) {
 
-  Sys.unsetenv("GITHUB_PAT")
-  Sys.unsetenv("GITHUB_TOKEN")
-
   remotes::install_github(
     "powellgenomicslab/scPred",
-    upgrade = "never",
     dependencies = TRUE,
-    auth_token = NULL
+    upgrade = "never"
   )
 
 } else {
 
-  message("scPred already installed.")
+  message(
+    "scPred already installed: ",
+    packageVersion("scPred")
+  )
 }
 
 # ============================================================
-# 6. VERIFY INSTALLATIONS
+# 6. VERIFY
 # ============================================================
 
 message("============================================================")
-message("Verifying installed packages")
+message("Checking package installation")
 message("============================================================")
 
 required_packages <- c(
@@ -192,9 +165,7 @@ for (pkg in required_packages) {
       "OK: ",
       pkg,
       " ",
-      as.character(
-        packageVersion(pkg)
-      )
+      packageVersion(pkg)
     )
 
   } else {
@@ -212,53 +183,56 @@ for (pkg in required_packages) {
 }
 
 # ============================================================
-# 7. STOP IF SOMETHING IS MISSING
+# 7. STOP IF A PACKAGE IS MISSING
 # ============================================================
 
 if (length(failed) > 0) {
 
   stop(
     paste(
-      "The following packages failed to install:",
+      "Package installation failed:",
       paste(failed, collapse = ", ")
     )
   )
 }
 
 # ============================================================
-# 8. FINAL MESSAGE
+# 8. FINAL CHECK
 # ============================================================
 
 message("============================================================")
-message("ALL REQUIRED PACKAGES INSTALLED SUCCESSFULLY")
+message("ALL PACKAGES INSTALLED SUCCESSFULLY")
 message("============================================================")
 
-message("R version: ", R.version.string)
+message(
+  "R version: ",
+  R.version.string
+)
 
 message(
   "Seurat: ",
-  as.character(packageVersion("Seurat"))
+  packageVersion("Seurat")
 )
 
 message(
   "SeuratObject: ",
-  as.character(packageVersion("SeuratObject"))
+  packageVersion("SeuratObject")
 )
 
 message(
   "SingleR: ",
-  as.character(packageVersion("SingleR"))
+  packageVersion("SingleR")
 )
 
 message(
   "scPred: ",
-  as.character(packageVersion("scPred"))
+  packageVersion("scPred")
 )
 
 message(
   "Harmony: ",
-  as.character(packageVersion("harmony"))
+  packageVersion("harmony")
 )
 
-message("scAnnoX is NOT used in this workflow.")
+message("scAnnoX: NOT USED")
 ```
