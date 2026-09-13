@@ -183,7 +183,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          Rscript scripts/08_consensus_annotation.R
+          Rscript scripts/08b_consensus_annotation.R
 
       # ==========================================================
       # 15. DIFFERENTIAL EXPRESSION
@@ -193,7 +193,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          Rscript scripts/09_differential_expression.R
+          Rscript scripts/09b_differential_expression.R
 
       # ==========================================================
       # 16. FINAL FIGURES
@@ -203,7 +203,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          Rscript scripts/10_final_figures.R
+          Rscript scripts/10b_final_figures.R
 
       # ==========================================================
       # 17. SAVE SESSION INFO
