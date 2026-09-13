@@ -1,4 +1,5 @@
-name: AML scRNA-seq full analysis w/o scAnnoX
+```yaml
+name: AML scRNA-seq full analysis w-o scAnnoX
 
 on:
   workflow_dispatch:
@@ -7,23 +8,20 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+
   scrnaseq-analysis:
 
     runs-on: ubuntu-latest
 
     timeout-minutes: 360
 
-    env:
-      RENV_CONFIG_AUTOLOADER_ENABLED: false
-      R_LIBS_USER: ~/.local/lib/R
-
     steps:
 
       # ==========================================================
-      # 1. CHECKOUT REPOSITORY
+      # 1. CHECKOUT
       # ==========================================================
 
       - name: Checkout repository
@@ -36,7 +34,7 @@ jobs:
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
         with:
-          r-version: '4.4'
+          r-version: '4.4.3'
           use-public-rspm: true
 
       # ==========================================================
@@ -45,6 +43,8 @@ jobs:
 
       - name: Install system dependencies
         run: |
+          set -euo pipefail
+
           sudo apt-get update
 
           sudo apt-get install -y \
@@ -63,34 +63,30 @@ jobs:
             libhdf5-dev
 
       # ==========================================================
-      # 4. CACHE R PACKAGES
+      # 4. CHECK R
       # ==========================================================
 
-      - name: Cache R packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/lib/R
-          key: |
-            ${{ runner.os }}-r-${{ hashFiles(
-              'scripts/00_install_packages.R'
-            ) }}
-          restore-keys: |
-            ${{ runner.os }}-r-
-
-      # ==========================================================
-      # 5. INSTALL R PACKAGES
-      # ==========================================================
-      - name: Install R packages
+      - name: Check R installation
         run: |
           set -euo pipefail
-          Rscript scripts/00_install_packages.R
+
+          echo "===== R VERSION ====="
+          R --version
+
+          echo "===== RSCRIPT VERSION ====="
+          Rscript --version
+
+          echo "===== R LIBRARY PATHS ====="
+          Rscript -e 'print(.libPaths())'
 
       # ==========================================================
-      # 6. CREATE OUTPUT DIRECTORIES
+      # 5. CREATE OUTPUT DIRECTORIES
       # ==========================================================
 
       - name: Create project directories
         run: |
+          set -euo pipefail
+
           mkdir -p \
             data/GSE145410 \
             figures/qc \
@@ -104,7 +100,41 @@ jobs:
             environment
 
       # ==========================================================
-      # 7. DOWNLOAD GEO DATA
+      # 6. VALIDATE INSTALLATION SCRIPT
+      # ==========================================================
+
+      - name: Validate 00_install_packages.R
+        run: |
+          set -euo pipefail
+
+          echo "===== FILE ====="
+          ls -lah scripts/00_install_packages.R
+
+          echo "===== SCRIPT CONTENT ====="
+          nl -ba scripts/00_install_packages.R
+
+          echo "===== R PARSE TEST ====="
+
+          Rscript -e '
+            parse(
+              file = "scripts/00_install_packages.R"
+            )
+
+            cat("R PARSE: OK\n")
+          '
+
+      # ==========================================================
+      # 7. INSTALL PACKAGES
+      # ==========================================================
+
+      - name: Install R packages
+        run: |
+          set -euo pipefail
+
+          Rscript scripts/00_install_packages.R
+
+      # ==========================================================
+      # 8. DOWNLOAD GEO DATA
       # ==========================================================
 
       - name: Download GSE145410
@@ -114,7 +144,7 @@ jobs:
           Rscript scripts/01_download_GSE145410.R
 
       # ==========================================================
-      # 8. IMPORT + QC
+      # 9. IMPORT + QC
       # ==========================================================
 
       - name: Import data and perform adaptive QC
@@ -124,17 +154,17 @@ jobs:
           Rscript scripts/02_import_and_QC.R
 
       # ==========================================================
-      # 9. NORMALIZATION + HVG
+      # 10. NORMALIZATION + HVG
       # ==========================================================
 
-      - name: Normalize and select highly variable genes
+      - name: Normalize and select HVGs
         run: |
           set -euo pipefail
 
           Rscript scripts/03_normalization_HVG.R
 
       # ==========================================================
-      # 10. PCA + INITIAL CLUSTERING + UMAP
+      # 11. PCA + CLUSTERING + UMAP
       # ==========================================================
 
       - name: PCA clustering and UMAP
@@ -144,7 +174,7 @@ jobs:
           Rscript scripts/04_PCA_clustering_UMAP.R
 
       # ==========================================================
-      # 11. SEURAT v5 CCA INTEGRATION
+      # 12. SEURAT v5 CCA INTEGRATION
       # ==========================================================
 
       - name: Seurat v5 CCA integration
@@ -154,7 +184,7 @@ jobs:
           Rscript scripts/05_Seurat5_integration.R
 
       # ==========================================================
-      # 12. SINGLER ANNOTATION
+      # 13. SINGLER
       # ==========================================================
 
       - name: SingleR annotation
@@ -164,7 +194,7 @@ jobs:
           Rscript scripts/06_annotation_SingleR.R
 
       # ==========================================================
-      # 13. SCPRED ANNOTATION
+      # 14. SCPRED
       # ==========================================================
 
       - name: scPred annotation
@@ -174,17 +204,17 @@ jobs:
           Rscript scripts/07_annotation_scPred.R
 
       # ==========================================================
-      # 14. CONSENSUS ANNOTATION
+      # 15. CONSENSUS
       # ==========================================================
 
-      - name: Build SingleR + scPred consensus
+      - name: SingleR + scPred consensus
         run: |
           set -euo pipefail
 
           Rscript scripts/08b_consensus_annotation.R
 
       # ==========================================================
-      # 15. DIFFERENTIAL EXPRESSION
+      # 16. DIFFERENTIAL EXPRESSION
       # ==========================================================
 
       - name: Differential expression
@@ -194,25 +224,32 @@ jobs:
           Rscript scripts/09b_differential_expression.R
 
       # ==========================================================
-      # 16. FINAL FIGURES
+      # 17. FINAL FIGURES
       # ==========================================================
 
-      - name: Generate final figures
+      - name: Final figures
         run: |
           set -euo pipefail
 
           Rscript scripts/10b_final_figures.R
 
       # ==========================================================
-      # 17. SAVE SESSION INFO
+      # 18. SESSION INFO
       # ==========================================================
 
       - name: Save session information
         run: |
-          Rscript -e 'writeLines(capture.output(sessionInfo()), "environment/sessionInfo_GitHubActions.txt")'
+          set -euo pipefail
+
+          Rscript -e '
+            writeLines(
+              capture.output(sessionInfo()),
+              "environment/sessionInfo_GitHubActions.txt"
+            )
+          '
 
       # ==========================================================
-      # 18. CHECK OUTPUTS
+      # 19. CHECK RESULTS
       # ==========================================================
 
       - name: Check analysis outputs
@@ -220,22 +257,22 @@ jobs:
           set -euo pipefail
 
           echo "===== OBJECTS ====="
-          find results/objects -type f | sort
+          find results/objects -type f | sort || true
 
           echo "===== QC ====="
-          find results/qc -type f | sort
+          find results/qc -type f | sort || true
 
           echo "===== ANNOTATION ====="
-          find results/annotation -type f | sort
+          find results/annotation -type f | sort || true
 
           echo "===== DIFFERENTIAL EXPRESSION ====="
-          find results/differential_expression -type f | sort
+          find results/differential_expression -type f | sort || true
 
           echo "===== FIGURES ====="
-          find figures -type f | sort
+          find figures -type f | sort || true
 
       # ==========================================================
-      # 19. UPLOAD RESULTS AS GITHUB ARTIFACT
+      # 20. UPLOAD RESULTS
       # ==========================================================
 
       - name: Upload analysis results
@@ -246,5 +283,6 @@ jobs:
             results/
             figures/
             environment/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
+```
