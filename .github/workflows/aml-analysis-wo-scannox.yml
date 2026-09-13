@@ -1,4 +1,3 @@
-```yaml
 name: AML scRNA-seq full analysis w-o scAnnoX
 
 on:
@@ -285,4 +284,3 @@ jobs:
             environment/
           if-no-files-found: warn
           retention-days: 30
-```
