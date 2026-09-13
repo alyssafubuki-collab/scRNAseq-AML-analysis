@@ -95,15 +95,15 @@ BiocManager::install(
 # ============================================================
 
 message("============================================================")
-message("Installing Harmony")
+message("Checking Harmony")
 message("============================================================")
 
 if (!requireNamespace("harmony", quietly = TRUE)) {
 
-  remotes::install_github(
-    "immunogenomics/harmony",
-    dependencies = TRUE,
-    upgrade = "never"
+  message("Harmony is not installed.")
+
+  stop(
+    "Harmony must be installed before running the analysis."
   )
 
 } else {
@@ -124,10 +124,48 @@ message("============================================================")
 
 if (!requireNamespace("scPred", quietly = TRUE)) {
 
-  remotes::install_github(
-    "powellgenomicslab/scPred",
-    dependencies = TRUE,
-    upgrade = "never"
+  message("Downloading scPred from public GitHub repository")
+
+  system2(
+    "curl",
+    args = c(
+      "-L",
+      "--fail",
+      "--retry", "3",
+      "-H", "Authorization:",
+      "-H", "X-GitHub-Api-Version:",
+      "https://github.com/powellgenomicslab/scPred/archive/refs/heads/master.tar.gz",
+      "-o", "scPred.tar.gz"
+    )
+  )
+
+  unlink("scPred-src", recursive = TRUE)
+
+  dir.create(
+    "scPred-src",
+    recursive = TRUE
+  )
+
+  system2(
+    "tar",
+    args = c(
+      "-xzf",
+      "scPred.tar.gz",
+      "--strip-components=1",
+      "-C",
+      "scPred-src"
+    )
+  )
+
+  system2(
+    "R",
+    args = c(
+      "CMD",
+      "INSTALL",
+      "--no-multiarch",
+      "--with-keep.source",
+      "scPred-src"
+    )
   )
 
 } else {
