@@ -1,0 +1,252 @@
+name: AML scRNA-seq full analysis
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  scrnaseq-analysis:
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 360
+
+    env:
+      RENV_CONFIG_AUTOLOADER_ENABLED: false
+      R_LIBS_USER: ~/.local/lib/R
+
+    steps:
+
+      # ==========================================================
+      # 1. CHECKOUT REPOSITORY
+      # ==========================================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ==========================================================
+      # 2. SETUP R
+      # ==========================================================
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.4'
+          use-public-rspm: true
+
+      # ==========================================================
+      # 3. SYSTEM DEPENDENCIES
+      # ==========================================================
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+
+          sudo apt-get install -y \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            libxml2-dev \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libpng-dev \
+            libtiff5-dev \
+            libjpeg-dev \
+            libharfbuzz-dev \
+            libfribidi-dev \
+            libgit2-dev \
+            libglpk-dev \
+            libhdf5-dev
+
+      # ==========================================================
+      # 4. CACHE R PACKAGES
+      # ==========================================================
+
+      - name: Cache R packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/lib/R
+          key: |
+            ${{ runner.os }}-r-${{ hashFiles(
+              'scripts/00_install_packages.R'
+            ) }}
+          restore-keys: |
+            ${{ runner.os }}-r-
+
+      # ==========================================================
+      # 5. INSTALL R PACKAGES
+      # ==========================================================
+
+      - name: Install R packages
+        run: |
+          set -euo pipefail
+
+          Rscript scripts/00_install_packages.R
+
+      # ==========================================================
+      # 6. CREATE OUTPUT DIRECTORIES
+      # ==========================================================
+
+      - name: Create project directories
+        run: |
+          mkdir -p \
+            data/GSE145410 \
+            figures/qc \
+            figures/integration \
+            figures/annotation \
+            figures/differential_expression \
+            results/qc \
+            results/annotation \
+            results/differential_expression \
+            results/objects \
+            environment
+
+      # ==========================================================
+      # 7. DOWNLOAD GEO DATA
+      # ==========================================================
+
+      - name: Download GSE145410
+        run: |
+          set -euo pipefail
+
+          Rscript scripts/01_download_GSE145410.R
+
+      # ==========================================================
+      # 8. IMPORT + QC
+      # ==========================================================
+
+      - name: Import data and perform adaptive QC
+        run: |
+          set -euo pipefail
+
+          Rscript scripts/02_import_and_QC.R
+
+      # ==========================================================
+      # 9. NORMALIZATION + HVG
+      # ==========================================================
+
+      - name: Normalize and select highly variable genes
+        run: |
+          set -euo pipefail
+
+          Rscript scripts/03_normalization_HVG.R
+
+      # ==========================================================
+      # 10. PCA + INITIAL CLUSTERING + UMAP
+      # ==========================================================
+
+      - name: PCA clustering and UMAP
+        run: |
+          set -euo pipefail
+
+          Rscript scripts/04_PCA_clustering_UMAP.R
+
+      # ==========================================================
+      # 11. SEURAT v5 CCA INTEGRATION
+      # ==========================================================
+
+      - name: Seurat v5 CCA integration
+        run: |
+          set -euo pipefail
+
+          Rscript scripts/05_Seurat5_integration.R
+
+      # ==========================================================
+      # 12. SINGLER ANNOTATION
+      # ==========================================================
+
+      - name: SingleR annotation
+        run: |
+          set -euo pipefail
+
+          Rscript scripts/06_annotation_SingleR.R
+
+      # ==========================================================
+      # 13. SCPRED ANNOTATION
+      # ==========================================================
+
+      - name: scPred annotation
+        run: |
+          set -euo pipefail
+
+          Rscript scripts/07_annotation_scPred.R
+
+      # ==========================================================
+      # 14. CONSENSUS ANNOTATION
+      # ==========================================================
+
+      - name: Build SingleR + scPred consensus
+        run: |
+          set -euo pipefail
+
+          Rscript scripts/08_consensus_annotation.R
+
+      # ==========================================================
+      # 15. DIFFERENTIAL EXPRESSION
+      # ==========================================================
+
+      - name: Differential expression
+        run: |
+          set -euo pipefail
+
+          Rscript scripts/09_differential_expression.R
+
+      # ==========================================================
+      # 16. FINAL FIGURES
+      # ==========================================================
+
+      - name: Generate final figures
+        run: |
+          set -euo pipefail
+
+          Rscript scripts/10_final_figures.R
+
+      # ==========================================================
+      # 17. SAVE SESSION INFO
+      # ==========================================================
+
+      - name: Save session information
+        run: |
+          Rscript -e 'writeLines(capture.output(sessionInfo()), "environment/sessionInfo_GitHubActions.txt")'
+
+      # ==========================================================
+      # 18. CHECK OUTPUTS
+      # ==========================================================
+
+      - name: Check analysis outputs
+        run: |
+          set -euo pipefail
+
+          echo "===== OBJECTS ====="
+          find results/objects -type f | sort
+
+          echo "===== QC ====="
+          find results/qc -type f | sort
+
+          echo "===== ANNOTATION ====="
+          find results/annotation -type f | sort
+
+          echo "===== DIFFERENTIAL EXPRESSION ====="
+          find results/differential_expression -type f | sort
+
+          echo "===== FIGURES ====="
+          find figures -type f | sort
+
+      # ==========================================================
+      # 19. UPLOAD RESULTS AS GITHUB ARTIFACT
+      # ==========================================================
+
+      - name: Upload analysis results
+        uses: actions/upload-artifact@v4
+        with:
+          name: AML-scRNAseq-analysis-results
+          path: |
+            results/
+            figures/
+            environment/
+          if-no-files-found: error
+          retention-days: 30
