@@ -486,7 +486,8 @@ jobs:
       # 10. CARET
       # ============================================================
 
-      - name: Install caret
+
+      - name: Install caret dependencies and caret
         shell: bash
         run: |
           set -euo pipefail
@@ -498,30 +499,59 @@ jobs:
             )
           )
 
-          if (!requireNamespace("caret", quietly = TRUE)) {
-            install.packages(
-              "caret",
-              dependencies = c(
-                "Depends",
-                "Imports",
-                "LinkingTo"
+          options(Ncpus = 2)
+
+          packages <- c(
+            "tzdb",
+            "clock",
+            "recipes",
+            "caret"
+          )
+
+          for (pkg in packages) {
+
+            cat(
+              "\n============================================================\n",
+              "Installing ",
+              pkg,
+              "\n",
+              "============================================================\n",
+              sep = ""
+            )
+
+            if (!requireNamespace(pkg, quietly = TRUE)) {
+
+              install.packages(
+                pkg,
+                dependencies = c(
+                  "Depends",
+                  "Imports",
+                  "LinkingTo"
+                )
               )
+            }
+
+            if (!requireNamespace(pkg, quietly = TRUE)) {
+              stop(
+                paste0(
+                  "Installation failed for package: ",
+                  pkg
+                )
+              )
+            }
+
+            cat(
+              pkg,
+              " ",
+              as.character(packageVersion(pkg)),
+              " installed successfully.\n",
+              sep = ""
             )
           }
 
-          if (!requireNamespace("caret", quietly = TRUE)) {
-            stop("caret installation failed.")
-          }
-
-          cat(
-            "caret ",
-            as.character(packageVersion("caret")),
-            " installed.\n",
-            sep = ""
-          )
+          cat("\nAll caret dependencies installed successfully.\n")
           EOF
-
-
+          
       # ============================================================
       # 11. scPred DEPENDENCIES
       # ============================================================
