@@ -113,26 +113,44 @@ message("============================================================")
 message("1/8 - Installing Seurat web/reporting dependencies")
 message("============================================================")
 
-# ------------------------------------------------------------
-# Lowest-level dependency first
-# ------------------------------------------------------------
+# ============================================================
+# Seurat prerequisites
+# ============================================================
 
-install_cran(
-  c(
-    "sass"
-  )
-)
+cat("\n============================================================\n")
+cat("Installing Seurat prerequisites\n")
+cat("============================================================\n")
 
-# ------------------------------------------------------------
-# bslib
-# ------------------------------------------------------------
+# fs is required by sass
+install_cran(c("fs"))
 
-install_cran(
-  c(
-    "bslib"
-  )
-)
+# sass is required by bslib
+install_cran(c("sass"))
 
+# bslib is required by rmarkdown
+install_cran(c("bslib"))
+
+# Remaining rmarkdown dependencies
+install_cran(c(
+  "fontawesome",
+  "jquerylib",
+  "knitr"
+))
+
+# rmarkdown
+install_cran(c("rmarkdown"))
+
+# htmlwidgets / plotly
+install_cran(c(
+  "htmlwidgets",
+  "plotly"
+))
+
+# shiny / miniUI
+install_cran(c(
+  "shiny",
+  "miniUI"
+))
 # ------------------------------------------------------------
 # rmarkdown dependencies
 # ------------------------------------------------------------
