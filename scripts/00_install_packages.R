@@ -1,4 +1,3 @@
-```r
 # ============================================================
 # AML scRNA-seq analysis
 # Package installation for GitHub Actions
@@ -671,4 +670,3 @@ message(
 message("============================================================")
 message("Installation complete")
 message("============================================================")
-```
