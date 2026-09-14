@@ -13,7 +13,7 @@ message("Starting package installation")
 message("============================================================")
 
 # ============================================================
-# Helper
+# Helper: CRAN installation
 # ============================================================
 
 install_cran <- function(packages) {
@@ -41,7 +41,6 @@ install_cran <- function(packages) {
           "LinkingTo"
         )
       )
-
     }
   }
 }
@@ -64,7 +63,8 @@ cran_packages <- c(
   "GEOquery",
   "data.table",
   "future",
-  "remotes"
+  "remotes",
+  "RhpcBLASctl"
 )
 
 install_cran(cran_packages)
@@ -74,7 +74,7 @@ install_cran(cran_packages)
 # ============================================================
 
 message("============================================================")
-message("Installing Bioconductor")
+message("Installing Bioconductor packages")
 message("============================================================")
 
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
@@ -104,60 +104,57 @@ BiocManager::install(
 )
 
 # ============================================================
-# Dependencies for Harmony and scPred
+# Explicit Seurat + GEOquery verification/reinstallation
 # ============================================================
 
 message("============================================================")
-message("Installing Harmony and scPred dependencies")
+message("Ensuring Seurat and GEOquery are installed")
 message("============================================================")
 
-extra_dependencies <- c(
-  "RhpcBLASctl",
-  "ggbeeswarm",
-  "MLmetrics",
-  "caret",
-  "kernlab",
-  "pROC"
-)
+# Seurat
+if (!requireNamespace("Seurat", quietly = TRUE)) {
 
-install_cran(extra_dependencies)
+  message("Seurat is missing. Installing Seurat explicitly.")
 
-# ============================================================
-# Verify dependencies
-# ============================================================
-
-message("============================================================")
-message("Checking Harmony/scPred dependencies")
-message("============================================================")
-
-required_extra_dependencies <- c(
-  "RhpcBLASctl",
-  "ggbeeswarm",
-  "MLmetrics",
-  "caret",
-  "kernlab",
-  "pROC"
-)
-
-for (pkg in required_extra_dependencies) {
-
-  if (!requireNamespace(pkg, quietly = TRUE)) {
-
-    stop(
-      "Required dependency is missing: ",
-      pkg
+  install.packages(
+    "Seurat",
+    dependencies = c(
+      "Depends",
+      "Imports",
+      "LinkingTo"
     )
-
-  } else {
-
-    message(
-      "OK: ",
-      pkg,
-      " ",
-      as.character(packageVersion(pkg))
-    )
-  }
+  )
 }
+
+# GEOquery
+if (!requireNamespace("GEOquery", quietly = TRUE)) {
+
+  message("GEOquery is missing. Installing GEOquery explicitly.")
+
+  BiocManager::install(
+    "GEOquery",
+    ask = FALSE,
+    update = FALSE
+  )
+}
+
+# ============================================================
+# scPred dependencies
+# ============================================================
+
+message("============================================================")
+message("Installing scPred dependencies")
+message("============================================================")
+
+scpred_dependencies <- c(
+  "ggbeeswarm",
+  "MLmetrics",
+  "caret",
+  "kernlab",
+  "pROC"
+)
+
+install_cran(scpred_dependencies)
 
 # ============================================================
 # Verify scPred dependencies
@@ -196,10 +193,7 @@ for (pkg in required_scpred_dependencies) {
 }
 
 # ============================================================
-# Harmony
-#
-# scPred requires HarmonyMatrix in the workflow.
-# Use the known-compatible Harmony 1.2.4 release.
+# Harmony 1.2.4
 # ============================================================
 
 message("============================================================")
@@ -244,14 +238,14 @@ if (!harmony_ok) {
 
   unlink(harmony_tar)
 
-  download_ok <- download.file(
+  download_status <- download.file(
     url = harmony_url,
     destfile = harmony_tar,
     mode = "wb",
     quiet = FALSE
   )
 
-  if (!identical(download_ok, 0L)) {
+  if (!identical(download_status, 0L)) {
 
     stop(
       "Failed to download Harmony ",
@@ -259,7 +253,7 @@ if (!harmony_ok) {
     )
   }
 
-  system2(
+  install_status <- system2(
     "R",
     args = c(
       "CMD",
@@ -270,15 +264,14 @@ if (!harmony_ok) {
     )
   )
 
+  if (!identical(install_status, 0L)) {
+
+    stop(
+      "Harmony installation failed."
+    )
+  }
+
   unlink(harmony_tar)
-
-} else {
-
-  message(
-    "Harmony ",
-    harmony_version_required,
-    " with HarmonyMatrix already installed."
-  )
 }
 
 # ============================================================
@@ -286,13 +279,14 @@ if (!harmony_ok) {
 # ============================================================
 
 message("============================================================")
-message("Checking Harmony installation")
+message("Checking Harmony")
 message("============================================================")
 
 if (!requireNamespace("harmony", quietly = TRUE)) {
 
-  stop("Harmony installation failed.")
-
+  stop(
+    "Harmony installation failed."
+  )
 }
 
 harmony_version <- as.character(
@@ -304,9 +298,7 @@ message(
   harmony_version
 )
 
-if (
-  harmony_version != harmony_version_required
-) {
+if (harmony_version != harmony_version_required) {
 
   stop(
     "Wrong Harmony version. Expected ",
@@ -322,18 +314,16 @@ if (
 ) {
 
   stop(
-    "HarmonyMatrix is not exported by the installed Harmony package."
+    "HarmonyMatrix is not available."
   )
 }
 
-message("OK: HarmonyMatrix is available.")
+message(
+  "OK: harmony::HarmonyMatrix available"
+)
 
 # ============================================================
 # scPred
-#
-# Install directly from the public GitHub archive.
-# This deliberately avoids remotes::install_github()
-# and therefore avoids GitHub PAT authentication.
 # ============================================================
 
 message("============================================================")
@@ -359,7 +349,6 @@ if (requireNamespace("scPred", quietly = TRUE)) {
   )
 
   scpred_tar <- "scPred.tar.gz"
-
   scpred_src <- "scPred-src"
 
   unlink(scpred_tar)
@@ -369,35 +358,29 @@ if (requireNamespace("scPred", quietly = TRUE)) {
     recursive = TRUE
   )
 
-  # ----------------------------------------------------------
   # Download
-  # ----------------------------------------------------------
-
-  download_ok <- download.file(
+  download_status <- download.file(
     url = scpred_url,
     destfile = scpred_tar,
     mode = "wb",
     quiet = FALSE
   )
 
-  if (!identical(download_ok, 0L)) {
+  if (!identical(download_status, 0L)) {
 
     stop(
-      "Failed to download scPred from GitHub."
+      "Failed to download scPred."
     )
   }
 
-  # ----------------------------------------------------------
-  # Extract source
-  # ----------------------------------------------------------
-
+  # Extract
   dir.create(
     scpred_src,
     recursive = TRUE,
     showWarnings = FALSE
   )
 
-  tar_status <- system2(
+  extract_status <- system2(
     "tar",
     args = c(
       "-xzf",
@@ -408,17 +391,14 @@ if (requireNamespace("scPred", quietly = TRUE)) {
     )
   )
 
-  if (!identical(tar_status, 0L)) {
+  if (!identical(extract_status, 0L)) {
 
     stop(
-      "Failed to extract scPred source archive."
+      "Failed to extract scPred source."
     )
   }
 
-  # ----------------------------------------------------------
-  # Install from local source
-  # ----------------------------------------------------------
-
+  # Install
   install_status <- system2(
     "R",
     args = c(
@@ -433,17 +413,11 @@ if (requireNamespace("scPred", quietly = TRUE)) {
   if (!identical(install_status, 0L)) {
 
     stop(
-      "R CMD INSTALL failed for scPred."
+      "scPred installation failed."
     )
   }
 
-  # ----------------------------------------------------------
-  # Cleanup
-  # ----------------------------------------------------------
-
-  unlink(
-    scpred_tar
-  )
+  unlink(scpred_tar)
 
   unlink(
     scpred_src,
@@ -452,7 +426,7 @@ if (requireNamespace("scPred", quietly = TRUE)) {
 }
 
 # ============================================================
-# Final package verification
+# Final verification
 # ============================================================
 
 message("============================================================")
@@ -511,14 +485,14 @@ for (pkg in required_packages) {
 }
 
 # ============================================================
-# Specific checks
+# Specific compatibility checks
 # ============================================================
 
 message("============================================================")
-message("Running specific compatibility checks")
+message("Running compatibility checks")
 message("============================================================")
 
-# Harmony
+# HarmonyMatrix
 if (
   requireNamespace("harmony", quietly = TRUE) &&
   "HarmonyMatrix" %in%
@@ -539,7 +513,7 @@ if (
   )
 
   message(
-    "FAILED: harmony::HarmonyMatrix unavailable"
+    "FAILED: harmony::HarmonyMatrix"
   )
 }
 
@@ -547,30 +521,21 @@ if (
 if (requireNamespace("scPred", quietly = TRUE)) {
 
   message(
-    "OK: scPred installed"
+    "OK: scPred installed: ",
+    as.character(packageVersion("scPred"))
   )
-
-  # Check bundled reference dataset
-  if (
-    "pbmc_1" %in%
-    getNamespaceExports("scPred")
-  ) {
-
-    message(
-      "OK: scPred::pbmc_1 available"
-    )
-
-  } else {
-
-    message(
-      "WARNING: scPred::pbmc_1 not exported by this version"
-    )
-  }
 
 } else {
 
+  failed_packages <- unique(
+    c(
+      failed_packages,
+      "scPred"
+    )
+  )
+
   message(
-    "FAILED: scPred not installed"
+    "FAILED: scPred"
   )
 }
 
@@ -584,9 +549,7 @@ message("============================================================")
 
 if (length(failed_packages) > 0) {
 
-  message(
-    "FAILED PACKAGES:"
-  )
+  message("FAILED PACKAGES:")
 
   for (pkg in failed_packages) {
     message(
