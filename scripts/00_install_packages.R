@@ -104,14 +104,15 @@ BiocManager::install(
 )
 
 # ============================================================
-# scPred dependencies
+# Dependencies for Harmony and scPred
 # ============================================================
 
 message("============================================================")
-message("Installing scPred dependencies")
+message("Installing Harmony and scPred dependencies")
 message("============================================================")
 
-scpred_dependencies <- c(
+extra_dependencies <- c(
+  "RhpcBLASctl",
   "ggbeeswarm",
   "MLmetrics",
   "caret",
@@ -119,7 +120,44 @@ scpred_dependencies <- c(
   "pROC"
 )
 
-install_cran(scpred_dependencies)
+install_cran(extra_dependencies)
+
+# ============================================================
+# Verify dependencies
+# ============================================================
+
+message("============================================================")
+message("Checking Harmony/scPred dependencies")
+message("============================================================")
+
+required_extra_dependencies <- c(
+  "RhpcBLASctl",
+  "ggbeeswarm",
+  "MLmetrics",
+  "caret",
+  "kernlab",
+  "pROC"
+)
+
+for (pkg in required_extra_dependencies) {
+
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+
+    stop(
+      "Required dependency is missing: ",
+      pkg
+    )
+
+  } else {
+
+    message(
+      "OK: ",
+      pkg,
+      " ",
+      as.character(packageVersion(pkg))
+    )
+  }
+}
 
 # ============================================================
 # Verify scPred dependencies
