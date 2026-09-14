@@ -47,19 +47,25 @@ jobs:
           sudo apt-get update
 
           sudo apt-get install -y \
+            libuv1-dev \
             libcurl4-openssl-dev \
             libssl-dev \
             libxml2-dev \
             libfontconfig1-dev \
             libfreetype6-dev \
             libpng-dev \
-            libtiff5-dev \
+            libtiff-dev \
             libjpeg-dev \
             libharfbuzz-dev \
             libfribidi-dev \
             libgit2-dev \
             libglpk-dev \
-            libhdf5-dev
+            libgsl-dev \
+            libhdf5-dev \
+            libxml2-dev \
+            libblas-dev \
+            liblapack-dev \
+            gfortran
 
       # ==========================================================
       # 4. CHECK R
@@ -69,17 +75,48 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "===== R VERSION ====="
+          echo "============================================================"
+          echo "R VERSION"
+          echo "============================================================"
+
           R --version
 
-          echo "===== RSCRIPT VERSION ====="
+          echo "============================================================"
+          echo "RSCRIPT VERSION"
+          echo "============================================================"
+
           Rscript --version
 
-          echo "===== R LIBRARY PATHS ====="
+          echo "============================================================"
+          echo "R LIBRARY PATHS"
+          echo "============================================================"
+
           Rscript -e 'print(.libPaths())'
 
       # ==========================================================
-      # 5. CREATE OUTPUT DIRECTORIES
+      # 5. CHECK SYSTEM LIBUV
+      # ==========================================================
+
+      - name: Check libuv
+        run: |
+          set -euo pipefail
+
+          echo "============================================================"
+          echo "CHECKING LIBUV"
+          echo "============================================================"
+
+          pkg-config --modversion libuv || true
+
+          echo "============================================================"
+          echo "CHECKING uv.h"
+          echo "============================================================"
+
+          test -f /usr/include/uv.h
+
+          echo "libuv development files detected."
+
+      # ==========================================================
+      # 6. CREATE OUTPUT DIRECTORIES
       # ==========================================================
 
       - name: Create project directories
@@ -99,20 +136,22 @@ jobs:
             environment
 
       # ==========================================================
-      # 6. VALIDATE INSTALLATION SCRIPT
+      # 7. VALIDATE INSTALLATION SCRIPT
       # ==========================================================
 
       - name: Validate 00_install_packages.R
         run: |
           set -euo pipefail
 
-          echo "===== FILE ====="
+          echo "============================================================"
+          echo "INSTALLATION SCRIPT"
+          echo "============================================================"
+
           ls -lah scripts/00_install_packages.R
 
-          echo "===== SCRIPT CONTENT ====="
-          nl -ba scripts/00_install_packages.R
-
-          echo "===== R PARSE TEST ====="
+          echo "============================================================"
+          echo "R PARSE TEST"
+          echo "============================================================"
 
           Rscript -e '
             parse(
@@ -123,7 +162,7 @@ jobs:
           '
 
       # ==========================================================
-      # 7. INSTALL PACKAGES
+      # 8. INSTALL PACKAGES
       # ==========================================================
 
       - name: Install R packages
@@ -133,7 +172,79 @@ jobs:
           Rscript scripts/00_install_packages.R
 
       # ==========================================================
-      # 8. DOWNLOAD GEO DATA
+      # 9. POST-INSTALLATION PACKAGE CHECK
+      # ==========================================================
+
+      - name: Verify critical packages
+        run: |
+          set -euo pipefail
+
+          Rscript - <<'EOF'
+
+          packages <- c(
+            "Seurat",
+            "SeuratObject",
+            "Matrix",
+            "GEOquery",
+            "scuttle",
+            "SingleR",
+            "celldex",
+            "SingleCellExperiment",
+            "SummarizedExperiment",
+            "harmony",
+            "scPred"
+          )
+
+          cat("============================================================\n")
+          cat("CRITICAL PACKAGE CHECK\n")
+          cat("============================================================\n")
+
+          failed <- character()
+
+          for (pkg in packages) {
+
+            if (requireNamespace(pkg, quietly = TRUE)) {
+
+              cat(
+                "OK: ",
+                pkg,
+                " ",
+                as.character(packageVersion(pkg)),
+                "\n",
+                sep = ""
+              )
+
+            } else {
+
+              cat(
+                "FAILED: ",
+                pkg,
+                "\n",
+                sep = ""
+              )
+
+              failed <- c(failed, pkg)
+            }
+          }
+
+          cat("============================================================\n")
+
+          if (length(failed) > 0) {
+
+            stop(
+              paste(
+                "Critical packages missing:",
+                paste(failed, collapse = ", ")
+              )
+            )
+          }
+
+          cat("All critical packages available.\n")
+
+          EOF
+
+      # ==========================================================
+      # 10. DOWNLOAD GEO DATA
       # ==========================================================
 
       - name: Download GSE145410
@@ -143,7 +254,7 @@ jobs:
           Rscript scripts/01_download_GSE145410.R
 
       # ==========================================================
-      # 9. IMPORT + QC
+      # 11. IMPORT + QC
       # ==========================================================
 
       - name: Import data and perform adaptive QC
@@ -153,7 +264,7 @@ jobs:
           Rscript scripts/02_import_and_QC.R
 
       # ==========================================================
-      # 10. NORMALIZATION + HVG
+      # 12. NORMALIZATION + HVG
       # ==========================================================
 
       - name: Normalize and select HVGs
@@ -163,7 +274,7 @@ jobs:
           Rscript scripts/03_normalization_HVG.R
 
       # ==========================================================
-      # 11. PCA + CLUSTERING + UMAP
+      # 13. PCA + CLUSTERING + UMAP
       # ==========================================================
 
       - name: PCA clustering and UMAP
@@ -173,7 +284,7 @@ jobs:
           Rscript scripts/04_PCA_clustering_UMAP.R
 
       # ==========================================================
-      # 12. SEURAT v5 CCA INTEGRATION
+      # 14. SEURAT v5 CCA INTEGRATION
       # ==========================================================
 
       - name: Seurat v5 CCA integration
@@ -183,7 +294,7 @@ jobs:
           Rscript scripts/05_Seurat5_integration.R
 
       # ==========================================================
-      # 13. SINGLER
+      # 15. SINGLER ANNOTATION
       # ==========================================================
 
       - name: SingleR annotation
@@ -193,7 +304,7 @@ jobs:
           Rscript scripts/06_annotation_SingleR.R
 
       # ==========================================================
-      # 14. SCPRED
+      # 16. SCPRED ANNOTATION
       # ==========================================================
 
       - name: scPred annotation
@@ -203,7 +314,7 @@ jobs:
           Rscript scripts/07_annotation_scPred.R
 
       # ==========================================================
-      # 15. CONSENSUS
+      # 17. CONSENSUS ANNOTATION
       # ==========================================================
 
       - name: SingleR + scPred consensus
@@ -213,7 +324,7 @@ jobs:
           Rscript scripts/08b_consensus_annotation.R
 
       # ==========================================================
-      # 16. DIFFERENTIAL EXPRESSION
+      # 18. DIFFERENTIAL EXPRESSION
       # ==========================================================
 
       - name: Differential expression
@@ -223,7 +334,7 @@ jobs:
           Rscript scripts/09b_differential_expression.R
 
       # ==========================================================
-      # 17. FINAL FIGURES
+      # 19. FINAL FIGURES
       # ==========================================================
 
       - name: Final figures
@@ -233,45 +344,62 @@ jobs:
           Rscript scripts/10b_final_figures.R
 
       # ==========================================================
-      # 18. SESSION INFO
+      # 20. SESSION INFO
       # ==========================================================
 
       - name: Save session information
         run: |
           set -euo pipefail
 
-          Rscript -e '
-            writeLines(
-              capture.output(sessionInfo()),
-              "environment/sessionInfo_GitHubActions.txt"
-            )
-          '
+          Rscript - <<'EOF'
+
+          writeLines(
+            capture.output(sessionInfo()),
+            "environment/sessionInfo_GitHubActions.txt"
+          )
+
+          EOF
 
       # ==========================================================
-      # 19. CHECK RESULTS
+      # 21. CHECK RESULTS
       # ==========================================================
 
       - name: Check analysis outputs
         run: |
           set -euo pipefail
 
-          echo "===== OBJECTS ====="
+          echo "============================================================"
+          echo "OBJECTS"
+          echo "============================================================"
+
           find results/objects -type f | sort || true
 
-          echo "===== QC ====="
+          echo "============================================================"
+          echo "QC"
+          echo "============================================================"
+
           find results/qc -type f | sort || true
 
-          echo "===== ANNOTATION ====="
+          echo "============================================================"
+          echo "ANNOTATION"
+          echo "============================================================"
+
           find results/annotation -type f | sort || true
 
-          echo "===== DIFFERENTIAL EXPRESSION ====="
+          echo "============================================================"
+          echo "DIFFERENTIAL EXPRESSION"
+          echo "============================================================"
+
           find results/differential_expression -type f | sort || true
 
-          echo "===== FIGURES ====="
+          echo "============================================================"
+          echo "FIGURES"
+          echo "============================================================"
+
           find figures -type f | sort || true
 
       # ==========================================================
-      # 20. UPLOAD RESULTS
+      # 22. UPLOAD RESULTS
       # ==========================================================
 
       - name: Upload analysis results
