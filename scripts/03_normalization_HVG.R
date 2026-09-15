@@ -1,10 +1,10 @@
 # ============================================================
 # 03_normalization_HVG.R
-# Log-normalization and highly variable gene selection
 #
-# Deliberately NO ScaleData() here.
-# Scaling is performed only on the 2,000 HVGs in scripts 04/05.
-# This avoids creating a large all-gene scale.data matrix.
+# LogNormalize + highly variable genes
+#
+# No ScaleData here.
+# Scaling is performed after layer splitting in script 05.
 # ============================================================
 
 source("R/functions.R")
@@ -22,6 +22,14 @@ input <- file.path(
   "02_QC_filtered.rds"
 )
 
+if (!file.exists(input)) {
+  stop("Input object not found: ", input)
+}
+
+message("============================================================")
+message("Loading QC-filtered object")
+message("============================================================")
+
 object <- readRDS(input)
 
 if (!inherits(object, "Seurat")) {
@@ -30,27 +38,21 @@ if (!inherits(object, "Seurat")) {
 
 DefaultAssay(object) <- "RNA"
 
-message("============================================================")
-message("Loading QC-filtered object")
-message("============================================================")
 message("Cells: ", ncol(object))
 message("Features: ", nrow(object))
 
-rna_layers <- Layers(object[["RNA"]])
+# ============================================================
+# VALIDATE RNA LAYERS
+# ============================================================
 
-message("RNA layers:")
-print(rna_layers)
+layers <- Layers(object[["RNA"]])
 
-if (any(grepl("SeuratProject", rna_layers))) {
+message("RNA layers before normalization:")
+print(layers)
+
+if (any(grepl("SeuratProject", layers))) {
   stop(
-    "Invalid SeuratProject layers detected before normalization."
-  )
-}
-
-if (length(rna_layers) > 2L) {
-  stop(
-    "RNA assay is already split before integration. ",
-    "The layer split must occur only in script 05."
+    "Invalid SeuratProject layers detected."
   )
 }
 
@@ -72,7 +74,7 @@ object <- NormalizeData(
 gc()
 
 # ============================================================
-# HVG
+# HIGHLY VARIABLE GENES
 # ============================================================
 
 message("============================================================")
@@ -86,21 +88,32 @@ object <- FindVariableFeatures(
   verbose = FALSE
 )
 
+hvg <- VariableFeatures(object)
+
 message(
-  "HVGs selected: ",
-  length(VariableFeatures(object))
+  "Number of HVGs: ",
+  length(hvg)
 )
+
+if (length(hvg) != 2000) {
+  warning(
+    "Expected 2,000 HVGs but obtained ",
+    length(hvg)
+  )
+}
 
 # ============================================================
 # HVG PLOT
 # ============================================================
 
 top10 <- head(
-  VariableFeatures(object),
+  hvg,
   10
 )
 
-p <- VariableFeaturePlot(object)
+p <- VariableFeaturePlot(
+  object
+)
 
 p <- LabelPoints(
   plot = p,
@@ -123,7 +136,7 @@ ggsave(
 
 write.csv(
   data.frame(
-    gene = VariableFeatures(object)
+    gene = hvg
   ),
   file.path(
     project_dir,
@@ -138,7 +151,7 @@ write.csv(
 # SAVE
 # ============================================================
 
-output_file <- file.path(
+output <- file.path(
   project_dir,
   "results",
   "objects",
@@ -147,10 +160,10 @@ output_file <- file.path(
 
 saveRDS(
   object,
-  output_file
+  output
 )
 
 message("============================================================")
 message("Normalization and HVG selection completed")
-message("Output: ", output_file)
+message("Output: ", output)
 message("============================================================")
