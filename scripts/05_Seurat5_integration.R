@@ -2,40 +2,46 @@
 # 05_Seurat5_integration.R
 # GSE145410 AML scRNA-seq
 #
-# Seurat v5 CCA integration
+# Seurat v5 CCA integration - V2
 #
 # Input:
 #   results/objects/03_normalized.rds
 #
 # Output:
 #   results/objects/05_integrated.rds
-#   results/tables/05_cluster_counts.csv
-#   figures/05_integration/
+#   results/tables/05_*.csv
+#   figures/05_integration/*
 #
-# Important:
-#   - Seurat v5 layer-based integration
-#   - Integration by sample
-#   - CCAIntegration
-#   - NO scAnnoX
-#   - NO manual Harmony integration
-#   - scPred/Harmony is handled later in the annotation workflow
+# IMPORTANT
+# ----------
+# - Seurat v5 layer-based integration
+# - CCAIntegration
+# - Explicit balanced sample tree
+# - k.weight = 20
+# - k.filter = 50
+# - 20 PCs
+# - 2,000 HVGs
+# - NO scAnnoX
+# - NO manual Harmony integration
+#
 # ============================================================
 
 
 # ============================================================
-# 0. Setup
+# 0. OPTIONS
 # ============================================================
 
 options(stringsAsFactors = FALSE)
 
 cat("\n")
 cat("============================================================\n")
-cat("05 - Seurat v5 CCA integration\n")
-cat("============================================================\n\n")
+cat("05 - Seurat v5 CCA integration V2\n")
+cat("============================================================\n")
+cat("\n")
 
 
 # ============================================================
-# 1. Load packages
+# 1. PACKAGES
 # ============================================================
 
 suppressPackageStartupMessages({
@@ -49,7 +55,26 @@ suppressPackageStartupMessages({
 
 
 # ============================================================
-# 2. Create output directories
+# 2. PARAMETERS
+# ============================================================
+
+INPUT_FILE <- "results/objects/03_normalized.rds"
+
+OUTPUT_FILE <- "results/objects/05_integrated.rds"
+
+N_HVG <- 2000
+
+N_PCS <- 20
+
+CCA_K_FILTER <- 50
+
+CCA_K_WEIGHT <- 20
+
+CLUSTER_RESOLUTION <- 0.4
+
+
+# ============================================================
+# 3. OUTPUT DIRECTORIES
 # ============================================================
 
 dir.create(
@@ -72,69 +97,112 @@ dir.create(
 
 
 # ============================================================
-# 3. Input
+# 4. CHECK INPUT
 # ============================================================
 
-input_file <- "results/objects/03_normalized.rds"
+if (!file.exists(INPUT_FILE)) {
 
-if (!file.exists(input_file)) {
   stop(
     paste0(
-      "\nERROR: Input file not found:\n",
-      input_file,
-      "\n\nRun 03_normalization_HVG.R first.\n"
+      "\nERROR: Input file does not exist:\n",
+      INPUT_FILE,
+      "\n\n",
+      "Run 03_normalization_HVG.R first.\n"
     )
   )
 }
 
-cat("Loading:", input_file, "\n")
-
-object <- readRDS(input_file)
-
 
 # ============================================================
-# 4. Basic validation
+# 5. LOAD OBJECT
 # ============================================================
+
+cat("Loading input object:\n")
+cat("  ", INPUT_FILE, "\n\n", sep = "")
+
+object <- readRDS(INPUT_FILE)
+
 
 if (!inherits(object, "Seurat")) {
-  stop("ERROR: input object is not a Seurat object.")
-}
 
-if (!"RNA" %in% Assays(object)) {
-  stop("ERROR: RNA assay not found.")
-}
-
-if (!"sample" %in% colnames(object[[]])) {
   stop(
-    "ERROR: metadata column 'sample' is missing. ",
-    "The integration must be performed by sample."
+    "ERROR: Input object is not a Seurat object."
   )
 }
 
-cat("\nObject successfully loaded.\n")
-cat("Cells:", ncol(object), "\n")
-cat("Genes:", nrow(object), "\n")
+
+if (!"RNA" %in% Assays(object)) {
+
+  stop(
+    "ERROR: RNA assay is missing."
+  )
+}
+
+
+if (!"sample" %in% colnames(object[[]])) {
+
+  stop(
+    "ERROR: metadata column 'sample' is missing."
+  )
+}
+
+
+# ============================================================
+# 6. BASIC OBJECT INFORMATION
+# ============================================================
+
+cat("============================================================\n")
+cat("INPUT OBJECT\n")
+cat("============================================================\n\n")
+
+cat("Cells :", ncol(object), "\n")
+cat("Genes :", nrow(object), "\n\n")
+
+cat("Assays:\n")
+print(Assays(object))
 
 cat("\nMetadata columns:\n")
 print(colnames(object[[]]))
 
 
 # ============================================================
-# 5. Define samples
+# 7. SAMPLE INFORMATION
 # ============================================================
 
-sample_ids <- sort(unique(as.character(object$sample)))
+sample_ids <- sort(
+  unique(
+    as.character(object$sample)
+  )
+)
 
-cat("\n============================================================\n")
-cat("Samples detected\n")
+cat("\n")
 cat("============================================================\n")
+cat("SAMPLES\n")
+cat("============================================================\n\n")
+
+cat("Number of samples:", length(sample_ids), "\n\n")
 
 print(sample_ids)
 
-cat("\nNumber of samples:", length(sample_ids), "\n")
 
+# ============================================================
+# 8. EXPECTED SAMPLE ORDER
+# ============================================================
+#
+# This order is used to construct an explicit balanced
+# integration tree.
+#
+# 1  DMSO_A
+# 2  DMSO_B
+# 3  INCB059872_A
+# 4  INCB059872_B
+# 5  AZA_A
+# 6  AZA_B
+# 7  INCB059872_AZA_A
+# 8  INCB059872_AZA_B
+#
+# ============================================================
 
-# Expected GSE145410 samples
 expected_samples <- c(
   "DMSO_A",
   "DMSO_B",
@@ -146,81 +214,127 @@ expected_samples <- c(
   "INCB059872_AZA_B"
 )
 
-missing_samples <- setdiff(expected_samples, sample_ids)
-extra_samples <- setdiff(sample_ids, expected_samples)
+
+# ============================================================
+# 9. VALIDATE SAMPLE SET
+# ============================================================
+
+missing_samples <- setdiff(
+  expected_samples,
+  sample_ids
+)
+
+extra_samples <- setdiff(
+  sample_ids,
+  expected_samples
+)
+
 
 if (length(missing_samples) > 0) {
-  warning(
-    "Expected samples missing: ",
-    paste(missing_samples, collapse = ", ")
+
+  stop(
+    paste0(
+      "\nERROR: Expected sample(s) missing:\n",
+      paste(
+        missing_samples,
+        collapse = ", "
+      )
+    )
   )
 }
+
 
 if (length(extra_samples) > 0) {
-  warning(
-    "Additional sample labels detected: ",
-    paste(extra_samples, collapse = ", ")
+
+  stop(
+    paste0(
+      "\nERROR: Unexpected sample(s) detected:\n",
+      paste(
+        extra_samples,
+        collapse = ", "
+      )
+    )
   )
 }
 
 
+# Force exact expected order
+sample_ids <- expected_samples
+
+
 # ============================================================
-# 6. Cells per sample
+# 10. CELLS PER SAMPLE
 # ============================================================
 
-cells_per_sample <- table(object$sample)
+cells_per_sample <- table(
+  factor(
+    object$sample,
+    levels = sample_ids
+  )
+)
 
-cat("\n============================================================\n")
-cat("Cells per sample\n")
-cat("============================================================\n")
+cat("\n")
+cat("Cells per sample:\n\n")
 
 print(cells_per_sample)
 
 write.csv(
   as.data.frame(cells_per_sample),
-  "results/tables/05_cells_per_sample_before_integration.csv",
+  "results/tables/05_cells_per_sample.csv",
   row.names = FALSE
 )
 
 
 # ============================================================
-# 7. Check current RNA layers
+# 11. INITIAL RNA LAYERS
 # ============================================================
 
-cat("\n============================================================\n")
-cat("RNA layers before preparation\n")
+cat("\n")
 cat("============================================================\n")
+cat("INITIAL RNA LAYERS\n")
+cat("============================================================\n\n")
 
-rna_layers_before <- Layers(object[["RNA"]])
+initial_layers <- Layers(
+  object[["RNA"]]
+)
 
-print(rna_layers_before)
+print(initial_layers)
 
 
 # ============================================================
-# 8. Rejoin RNA layers if necessary
+# 12. JOIN PREVIOUSLY SPLIT LAYERS IF NECESSARY
+# ============================================================
 #
 # We start from 03_normalized.rds.
 #
-# Integration requires the assay to be split by sample.
-# If the object already contains sample-specific layers,
-# first join them to avoid nested/repeated split layers.
+# If the object contains sample-specific layers already,
+# JoinLayers() is used before creating the clean split required
+# for this integration.
+#
 # ============================================================
 
-has_sample_layers <- any(
+sample_layer_pattern <- paste0(
+  "\\.(",
+  paste(
+    sample_ids,
+    collapse = "|"
+  ),
+  ")$"
+)
+
+has_sample_specific_layers <- any(
   grepl(
-    paste0(
-      "\\.",
-      paste(sample_ids, collapse = "|"),
-      "$"
-    ),
-    rna_layers_before
+    sample_layer_pattern,
+    initial_layers
   )
 )
 
-if (has_sample_layers) {
 
-  cat("\nSample-specific RNA layers already detected.\n")
-  cat("Joining RNA layers before the new split...\n\n")
+if (has_sample_specific_layers) {
+
+  cat("\n")
+  cat("Sample-specific layers detected.\n")
+  cat("Joining RNA layers before splitting again...\n\n")
 
   object[["RNA"]] <- JoinLayers(
     object[["RNA"]]
@@ -228,77 +342,75 @@ if (has_sample_layers) {
 
 } else {
 
-  cat("\nRNA assay is already in joined form.\n")
+  cat("\n")
+  cat("No sample-specific layers detected.\n")
+  cat("RNA assay is already suitable for splitting.\n")
 }
 
 
 # ============================================================
-# 9. Check layers after JoinLayers
+# 13. RNA LAYERS AFTER JOIN
 # ============================================================
 
-cat("\n============================================================\n")
-cat("RNA layers after JoinLayers check\n")
-cat("============================================================\n")
+cat("\n")
+cat("RNA layers after JoinLayers check:\n\n")
 
-print(
-  Layers(object[["RNA"]])
+layers_after_join <- Layers(
+  object[["RNA"]]
 )
 
+print(layers_after_join)
+
 
 # ============================================================
-# 10. Split RNA assay by sample
-#
-# Seurat v5 integration works with sample-specific layers:
-#
-# counts.SAMPLE
-# data.SAMPLE
-#
-# We keep all cells in a single Seurat object.
+# 14. SPLIT RNA BY SAMPLE
 # ============================================================
 
-cat("\n============================================================\n")
-cat("Splitting RNA assay by sample\n")
+cat("\n")
+cat("============================================================\n")
+cat("SPLITTING RNA ASSAY BY SAMPLE\n")
 cat("============================================================\n\n")
 
 object[["RNA"]] <- split(
   object[["RNA"]],
-  f = object$sample
+  f = factor(
+    object$sample,
+    levels = sample_ids
+  )
 )
 
 
 # ============================================================
-# 11. Inspect split layers
+# 15. VALIDATE SPLIT
 # ============================================================
 
-cat("\nRNA layers after split:\n\n")
-
-rna_layers_split <- Layers(
+split_layers <- Layers(
   object[["RNA"]]
 )
 
-print(rna_layers_split)
+cat("RNA layers after split:\n\n")
+print(split_layers)
 
-
-# ============================================================
-# 12. Validate sample-specific counts/data layers
-# ============================================================
 
 counts_layers <- grep(
   "^counts\\.",
-  rna_layers_split,
+  split_layers,
   value = TRUE
 )
 
 data_layers <- grep(
   "^data\\.",
-  rna_layers_split,
+  split_layers,
   value = TRUE
 )
 
-cat("\nCounts layers detected:", length(counts_layers), "\n")
+
+cat("\n")
+cat("Counts layers:", length(counts_layers), "\n")
 print(counts_layers)
 
-cat("\nData layers detected:", length(data_layers), "\n")
+cat("\n")
+cat("Data layers:", length(data_layers), "\n")
 print(data_layers)
 
 
@@ -308,14 +420,18 @@ if (length(counts_layers) != length(sample_ids)) {
     paste0(
       "\nERROR: Expected ",
       length(sample_ids),
-      " sample-specific counts layers but found ",
+      " counts layers but found ",
       length(counts_layers),
       ".\n\n",
-      "Current RNA layers:\n",
-      paste(rna_layers_split, collapse = "\n")
+      "RNA layers are:\n",
+      paste(
+        split_layers,
+        collapse = "\n"
+      )
     )
   )
 }
+
 
 if (length(data_layers) != length(sample_ids)) {
 
@@ -323,28 +439,25 @@ if (length(data_layers) != length(sample_ids)) {
     paste0(
       "\nERROR: Expected ",
       length(sample_ids),
-      " sample-specific data layers but found ",
+      " data layers but found ",
       length(data_layers),
       ".\n\n",
-      "Current RNA layers:\n",
-      paste(rna_layers_split, collapse = "\n")
+      "RNA layers are:\n",
+      paste(
+        split_layers,
+        collapse = "\n"
+      )
     )
-  )
-}
+  }
 
 
 # ============================================================
-# 13. Normalization
-#
-# The input was already normalized in script 03.
-#
-# We nevertheless call NormalizeData here because Seurat v5
-# performs normalization independently on the split layers.
-# This follows the Seurat v5 integration workflow.
+# 16. NORMALIZATION
 # ============================================================
 
-cat("\n============================================================\n")
-cat("Normalizing split RNA layers\n")
+cat("\n")
+cat("============================================================\n")
+cat("NORMALIZATION\n")
 cat("============================================================\n\n")
 
 object <- NormalizeData(
@@ -357,89 +470,68 @@ object <- NormalizeData(
 
 
 # ============================================================
-# 14. Find variable features
-#
-# 2,000 HVGs, as used in the rest of the project.
-#
-# With split layers, Seurat determines the variable features
-# for the individual layers and builds a consensus feature set.
+# 17. VARIABLE FEATURES
 # ============================================================
 
-cat("\n============================================================\n")
-cat("Finding variable features\n")
+cat("\n")
+cat("============================================================\n")
+cat("VARIABLE FEATURES\n")
 cat("============================================================\n\n")
 
 object <- FindVariableFeatures(
   object,
   assay = "RNA",
   selection.method = "vst",
-  nfeatures = 2000,
+  nfeatures = N_HVG,
   verbose = FALSE
 )
 
-hvg <- VariableFeatures(object)
+hvg <- VariableFeatures(
+  object
+)
 
-cat("Number of variable features:", length(hvg), "\n")
+
+cat(
+  "Number of HVGs:",
+  length(hvg),
+  "\n"
+)
+
 
 if (length(hvg) == 0) {
-  stop("ERROR: No variable features were identified.")
+
+  stop(
+    "ERROR: No variable features were identified."
+  )
 }
 
+
 if (length(hvg) < 1000) {
+
   warning(
-    "Less than 1,000 variable features were identified: ",
+    "Fewer than 1,000 HVGs were identified: ",
     length(hvg)
   )
 }
 
-cat("\nFirst variable features:\n")
-print(head(hvg, 20))
-
-
-# ============================================================
-# 15. Save HVG table
-# ============================================================
-
-hvg_table <- data.frame(
-  feature = hvg,
-  rank = seq_along(hvg)
-)
 
 write.csv(
-  hvg_table,
+  data.frame(
+    rank = seq_along(hvg),
+    feature = hvg
+  ),
   "results/tables/05_variable_features.csv",
   row.names = FALSE
 )
 
 
 # ============================================================
-# 16. Scale data
-#
-# IMPORTANT:
-# Do NOT require eight scale.data.sample layers here.
-#
-# Seurat v5's IntegrateLayers() accepts:
-#
-#   scale.layer = "scale.data"
-#
-# and internally handles the split assay layers.
-#
-# The previous script incorrectly expected:
-#
-#   scale.data.DMSO_A
-#   scale.data.DMSO_B
-#   ...
-#
-# which caused the CI failure:
-#
-#   Expected 8 scale.data layers, found 0
-#
-# We therefore only verify that Seurat produced a scale.data
-# layer usable by the integration workflow.
+# 18. SCALE DATA
 # ============================================================
 
-cat("\n============================================================\n")
-cat("Scaling variable features\n")
+cat("\n")
+cat("============================================================\n")
+cat("SCALING VARIABLE FEATURES\n")
 cat("============================================================\n\n")
 
 object <- ScaleData(
@@ -451,24 +543,25 @@ object <- ScaleData(
 
 
 # ============================================================
-# 17. Inspect scale.data layers
+# 19. CHECK SCALE DATA
 # ============================================================
 
-cat("\n============================================================\n")
-cat("Checking scale.data after ScaleData\n")
-cat("============================================================\n\n")
+cat("\n")
+cat("RNA layers after ScaleData:\n\n")
 
-rna_layers_scaled <- Layers(
+layers_after_scale <- Layers(
   object[["RNA"]]
 )
 
-print(rna_layers_scaled)
+print(layers_after_scale)
+
 
 scale_layers <- grep(
   "^scale\\.data",
-  rna_layers_scaled,
+  layers_after_scale,
   value = TRUE
 )
+
 
 cat(
   "\nScale layer(s) detected:",
@@ -483,70 +576,75 @@ if (length(scale_layers) == 0) {
 
   stop(
     paste0(
-      "\nERROR: ScaleData() did not create a usable scale.data layer.\n\n",
+      "\nERROR: No scale.data layer was created.\n\n",
       "Current RNA layers:\n",
-      paste(rna_layers_scaled, collapse = "\n"),
-      "\n\n",
-      "The integration cannot continue without scaled data."
+      paste(
+        layers_after_scale,
+        collapse = "\n"
+      )
     )
   )
 }
 
 
 # ============================================================
-# 18. PCA
-#
-# PCA is computed on the same 2,000 HVGs.
-#
-# 20 PCs are used for the CCA integration to reduce memory
-# consumption on GitHub Actions while retaining sufficient
-# dimensional information for this dataset.
+# 20. PCA
 # ============================================================
 
-cat("\n============================================================\n")
-cat("Running PCA\n")
+cat("\n")
+cat("============================================================\n")
+cat("PCA\n")
 cat("============================================================\n\n")
 
 object <- RunPCA(
   object,
   assay = "RNA",
   features = hvg,
-  npcs = 20,
+  npcs = N_PCS,
   verbose = FALSE
 )
 
 
 # ============================================================
-# 19. Validate PCA
+# 21. CHECK PCA
 # ============================================================
 
 if (!"pca" %in% Reductions(object)) {
-  stop("ERROR: PCA reduction was not created.")
+
+  stop(
+    "ERROR: PCA reduction was not generated."
+  )
 }
 
+
+pca_embeddings <- Embeddings(
+  object,
+  reduction = "pca"
+)
+
 pca_dims <- ncol(
-  Embeddings(
-    object,
-    reduction = "pca"
-  )
+  pca_embeddings
 )
 
 cat(
-  "PCA dimensions available:",
+  "PCA dimensions:",
   pca_dims,
   "\n"
 )
 
-if (pca_dims < 20) {
+
+if (pca_dims < N_PCS) {
+
   warning(
-    "Fewer than 20 PCA dimensions were generated: ",
-    pca_dims
+    "Only ",
+    pca_dims,
+    " PCA dimensions were generated."
   )
 }
 
 
 # ============================================================
-# 20. Save PCA plot
+# 22. ELBOW PLOT
 # ============================================================
 
 pdf(
@@ -559,7 +657,10 @@ print(
   ElbowPlot(
     object,
     reduction = "pca",
-    ndims = min(20, pca_dims)
+    ndims = min(
+      N_PCS,
+      pca_dims
+    )
   )
 )
 
@@ -567,54 +668,122 @@ dev.off()
 
 
 # ============================================================
-# 21. CCA integration
+# 23. EXPLICIT BALANCED SAMPLE TREE
+# ============================================================
 #
-# Official Seurat v5 workflow:
+# Dataset numbering:
 #
-# IntegrateLayers(
-#   object = object,
-#   method = CCAIntegration,
-#   orig.reduction = "pca",
-#   new.reduction = "integrated.cca"
-# )
+#   1 = DMSO_A
+#   2 = DMSO_B
+#   3 = INCB059872_A
+#   4 = INCB059872_B
+#   5 = AZA_A
+#   6 = AZA_B
+#   7 = INCB059872_AZA_A
+#   8 = INCB059872_AZA_B
 #
-# We explicitly provide:
-#   - assay = RNA
-#   - features = HVGs
-#   - layers = normalized sample-specific layers
-#   - scale.layer = "scale.data"
-#   - dims = 1:20
-#   - k.filter = 50
-#   - k.weight = 50
-#   - dims.to.integrate = 20
+# Integration steps:
 #
-# No Harmony integration is performed here.
+#   row 1: dataset 1 + dataset 2
+#   row 2: dataset 3 + dataset 4
+#   row 3: dataset 5 + dataset 6
+#   row 4: dataset 7 + dataset 8
+#
+#   row 5: result 1 + result 2
+#   row 6: result 3 + result 4
+#
+#   row 7: result 5 + result 6
+#
+# This avoids the automatically generated unbalanced tree
+# that previously produced:
+#
+#   Merging dataset 5 into 2
+#
+# immediately before the failing integration-vector step.
+#
+# ============================================================
+
+sample_tree <- matrix(
+  c(
+    -1, -2,
+    -3, -4,
+    -5, -6,
+    -7, -8,
+     1,  2,
+     3,  4,
+     5,  6
+  ),
+  ncol = 2,
+  byrow = TRUE
+)
+
+
+cat("\n")
+cat("============================================================\n")
+cat("EXPLICIT SAMPLE TREE\n")
+cat("============================================================\n\n")
+
+print(sample_tree)
+
+cat("\nDataset mapping:\n")
+
+for (i in seq_along(sample_ids)) {
+
+  cat(
+    "  ",
+    i,
+    " = ",
+    sample_ids[i],
+    "\n",
+    sep = ""
+  )
+}
+
+
+write.csv(
+  sample_tree,
+  "results/tables/05_sample_tree.csv",
+  row.names = FALSE
+)
+
+
+# ============================================================
+# 24. CCA INTEGRATION PARAMETERS
 # ============================================================
 
 cat("\n")
 cat("============================================================\n")
-cat("Running Seurat v5 CCA integration\n")
+cat("CCA INTEGRATION PARAMETERS\n")
 cat("============================================================\n\n")
 
-cat("Integration parameters:\n")
-cat("  Method              : CCAIntegration\n")
-cat("  Assay               : RNA\n")
-cat("  Features            :", length(hvg), "\n")
-cat("  Dimensions          : 1:20\n")
-cat("  k.filter            : 50\n")
-cat("  k.weight            : 50\n")
-cat("  dims.to.integrate   : 20\n")
-cat("  scale.layer         : scale.data\n")
+cat("Method            : CCAIntegration\n")
+cat("Assay             : RNA\n")
+cat("HVGs              :", length(hvg), "\n")
+cat("Dimensions        : 1:", N_PCS, "\n", sep = "")
+cat("k.filter          :", CCA_K_FILTER, "\n")
+cat("k.weight          :", CCA_K_WEIGHT, "\n")
+cat("dims.to.integrate :", N_PCS, "\n")
+cat("preserve.order    : TRUE\n")
+cat("sample.tree       : explicit balanced tree\n")
 cat("\n")
 
 
-# ------------------------------------------------------------
-# Integration wrapped in tryCatch to provide useful diagnostics
-# ------------------------------------------------------------
+# ============================================================
+# 25. RUN CCA INTEGRATION
+# ============================================================
+
+cat("============================================================\n")
+cat("RUNNING CCA INTEGRATION\n")
+cat("============================================================\n\n")
+
+integration_start <- Sys.time()
 
 integration_error <- NULL
 
-object <- tryCatch(
+integration_traceback <- NULL
+
+
+object_integrated <- tryCatch(
 
   {
 
@@ -625,13 +794,13 @@ object <- tryCatch(
       new.reduction = "integrated.cca",
       assay = "RNA",
       features = hvg,
-      layers = data_layers,
-      scale.layer = "scale.data",
       normalization.method = "LogNormalize",
-      dims = 1:20,
-      k.filter = 50,
-      k.weight = 50,
-      dims.to.integrate = 20,
+      dims = 1:N_PCS,
+      k.filter = CCA_K_FILTER,
+      k.weight = CCA_K_WEIGHT,
+      dims.to.integrate = N_PCS,
+      sample.tree = sample_tree,
+      preserve.order = TRUE,
       verbose = TRUE
     )
 
@@ -641,60 +810,201 @@ object <- tryCatch(
 
     integration_error <<- conditionMessage(e)
 
-    cat("\n")
-    cat("============================================================\n")
-    cat("CCA INTEGRATION ERROR\n")
-    cat("============================================================\n")
-    cat("\n")
-    cat(conditionMessage(e))
-    cat("\n\n")
+    integration_traceback <<- capture.output(
+      traceback()
+    )
 
     NULL
   }
 )
 
 
+integration_end <- Sys.time()
+
+integration_time <- difftime(
+  integration_end,
+  integration_start,
+  units = "mins"
+)
+
+
+cat("\n")
+cat("CCA runtime:",
+    round(
+      as.numeric(integration_time),
+      2
+    ),
+    "minutes\n"
+)
+
+
 # ============================================================
-# 22. Stop cleanly if integration failed
+# 26. HANDLE CCA FAILURE
 # ============================================================
 
-if (is.null(object)) {
+if (is.null(object_integrated)) {
 
-  cat("\n============================================================\n")
-  cat("Integration diagnostics\n")
+  cat("\n")
+  cat("============================================================\n")
+  cat("CCA INTEGRATION FAILED\n")
   cat("============================================================\n\n")
 
-  cat("RNA layers:\n")
-  print(Layers(object = readRDS(input_file)[["RNA"]]))
+  cat("Error message:\n")
+  cat(
+    integration_error,
+    "\n\n"
+  )
 
-  cat("\nSamples:\n")
-  print(table(object$sample))
 
-  cat("\nOriginal integration error:\n")
-  cat(integration_error, "\n")
+  # ----------------------------------------------------------
+  # Save diagnostics
+  # ----------------------------------------------------------
+
+  diagnostic_file <- paste0(
+    "results/tables/",
+    "05_CCA_failure_diagnostics.txt"
+  )
+
+  diagnostic_lines <- c(
+    "============================================================",
+    "CCA INTEGRATION FAILURE",
+    "============================================================",
+    "",
+    paste0(
+      "Input file: ",
+      INPUT_FILE
+    ),
+    paste0(
+      "Cells: ",
+      ncol(object)
+    ),
+    paste0(
+      "Genes: ",
+      nrow(object)
+    ),
+    paste0(
+      "Samples: ",
+      length(sample_ids)
+    ),
+    "",
+    "Samples:",
+    paste(
+      paste0(
+        seq_along(sample_ids),
+        " = ",
+        sample_ids
+      ),
+      collapse = "\n"
+    ),
+    "",
+    "RNA layers:",
+    paste(
+      Layers(object[["RNA"]]),
+      collapse = "\n"
+    ),
+    "",
+    "PCA dimensions:",
+    as.character(pca_dims),
+    "",
+    "HVGs:",
+    as.character(length(hvg)),
+    "",
+    "k.filter:",
+    as.character(CCA_K_FILTER),
+    "",
+    "k.weight:",
+    as.character(CCA_K_WEIGHT),
+    "",
+    "Sample tree:",
+    paste(
+      apply(
+        sample_tree,
+        1,
+        paste,
+        collapse = " "
+      ),
+      collapse = "\n"
+    ),
+    "",
+    "ERROR:",
+    integration_error,
+    "",
+    "TRACEBACK:",
+    integration_traceback
+  )
+
+  writeLines(
+    diagnostic_lines,
+    diagnostic_file
+  )
+
+
+  # ----------------------------------------------------------
+  # Save preprocessing object for debugging
+  # ----------------------------------------------------------
+
+  debug_file <- paste0(
+    "results/objects/",
+    "05_CCA_preintegration_debug.rds"
+  )
+
+  saveRDS(
+    object,
+    debug_file,
+    compress = TRUE
+  )
+
+
+  cat(
+    "Diagnostic file saved to:\n  ",
+    diagnostic_file,
+    "\n",
+    sep = ""
+  )
+
+  cat(
+    "Debug object saved to:\n  ",
+    debug_file,
+    "\n",
+    sep = ""
+  )
+
 
   stop(
     paste0(
       "\nCCA integration failed.\n\n",
-      "Original error:\n",
+      "Error:\n",
       integration_error,
       "\n\n",
-      "See the GitHub Actions log for the detailed Seurat traceback."
+      "The pre-integration object and diagnostic report were saved."
     )
   )
 }
 
 
 # ============================================================
-# 23. Validate integrated reduction
+# 27. RENAME OBJECT
+# ============================================================
+
+object <- object_integrated
+
+rm(object_integrated)
+
+gc()
+
+
+# ============================================================
+# 28. CHECK INTEGRATED REDUCTION
 # ============================================================
 
 cat("\n")
 cat("============================================================\n")
-cat("Validating integrated reduction\n")
+cat("CHECKING INTEGRATED REDUCTION\n")
 cat("============================================================\n\n")
 
-available_reductions <- Reductions(object)
+available_reductions <- Reductions(
+  object
+)
 
 cat("Available reductions:\n")
 print(available_reductions)
@@ -706,7 +1016,10 @@ if (!"integrated.cca" %in% available_reductions) {
     paste0(
       "\nERROR: integrated.cca reduction was not created.\n\n",
       "Available reductions:\n",
-      paste(available_reductions, collapse = ", ")
+      paste(
+        available_reductions,
+        collapse = ", "
+      )
     )
   )
 }
@@ -717,27 +1030,37 @@ integrated_embeddings <- Embeddings(
   reduction = "integrated.cca"
 )
 
+
+integrated_ncells <- nrow(
+  integrated_embeddings
+)
+
+integrated_ndims <- ncol(
+  integrated_embeddings
+)
+
+
 cat(
   "\nIntegrated cells:",
-  nrow(integrated_embeddings),
+  integrated_ncells,
   "\n"
 )
 
 cat(
   "Integrated dimensions:",
-  ncol(integrated_embeddings),
+  integrated_ndims,
   "\n"
 )
 
 
-if (nrow(integrated_embeddings) != ncol(object)) {
+if (integrated_ncells != ncol(object)) {
 
   stop(
     paste0(
-      "\nERROR: Number of cells in integrated reduction does not ",
-      "match the Seurat object.\n",
+      "\nERROR: integrated.cca does not contain the same number ",
+      "of cells as the Seurat object.\n\n",
       "Integrated cells: ",
-      nrow(integrated_embeddings),
+      integrated_ncells,
       "\n",
       "Object cells: ",
       ncol(object)
@@ -746,41 +1069,54 @@ if (nrow(integrated_embeddings) != ncol(object)) {
 }
 
 
+if (integrated_ndims < N_PCS) {
+
+  warning(
+    "integrated.cca contains only ",
+    integrated_ndims,
+    " dimensions."
+  )
+}
+
+
 # ============================================================
-# 24. Neighbors using integrated CCA space
+# 29. FIND NEIGHBORS
 # ============================================================
 
 cat("\n")
 cat("============================================================\n")
-cat("Computing neighbors from integrated CCA space\n")
+cat("FINDING NEIGHBORS\n")
 cat("============================================================\n\n")
 
 object <- FindNeighbors(
   object,
   reduction = "integrated.cca",
-  dims = 1:20,
+  dims = 1:min(
+    N_PCS,
+    integrated_ndims
+  ),
   verbose = FALSE
 )
 
 
 # ============================================================
-# 25. Clustering
+# 30. FIND CLUSTERS
 # ============================================================
 
 cat("\n")
 cat("============================================================\n")
-cat("Clustering\n")
+cat("FINDING CLUSTERS\n")
 cat("============================================================\n\n")
 
 object <- FindClusters(
   object,
-  resolution = 0.4,
+  resolution = CLUSTER_RESOLUTION,
   verbose = FALSE
 )
 
 
 # ============================================================
-# 26. Cluster statistics
+# 31. CLUSTER COUNTS
 # ============================================================
 
 cluster_counts <- as.data.frame(
@@ -794,29 +1130,34 @@ colnames(cluster_counts) <- c(
   "n_cells"
 )
 
+
 write.csv(
   cluster_counts,
   "results/tables/05_cluster_counts.csv",
   row.names = FALSE
 )
 
-cat("\nCluster counts:\n")
+
+cat("\nCluster counts:\n\n")
 print(cluster_counts)
 
 
 # ============================================================
-# 27. UMAP from integrated CCA
+# 32. UMAP
 # ============================================================
 
 cat("\n")
 cat("============================================================\n")
-cat("Running UMAP on integrated CCA space\n")
+cat("RUNNING UMAP\n")
 cat("============================================================\n\n")
 
 object <- RunUMAP(
   object,
   reduction = "integrated.cca",
-  dims = 1:20,
+  dims = 1:min(
+    N_PCS,
+    integrated_ndims
+  ),
   reduction.name = "umap.cca",
   reduction.key = "UMAPCCA_",
   verbose = FALSE
@@ -824,7 +1165,7 @@ object <- RunUMAP(
 
 
 # ============================================================
-# 28. UMAP - clusters
+# 33. UMAP - CLUSTERS
 # ============================================================
 
 p_cluster <- DimPlot(
@@ -834,19 +1175,23 @@ p_cluster <- DimPlot(
   label = TRUE,
   repel = TRUE
 ) +
-  ggtitle("GSE145410 - CCA integrated clusters") +
+  ggtitle(
+    "GSE145410 - CCA integrated clusters"
+  ) +
   theme_classic()
 
+
 ggsave(
-  filename = "figures/05_integration/05_UMAP_CCA_clusters.pdf",
-  plot = p_cluster,
+  "figures/05_integration/05_UMAP_CCA_clusters.pdf",
+  p_cluster,
   width = 8,
   height = 6
 )
 
+
 ggsave(
-  filename = "figures/05_integration/05_UMAP_CCA_clusters.png",
-  plot = p_cluster,
+  "figures/05_integration/05_UMAP_CCA_clusters.png",
+  p_cluster,
   width = 8,
   height = 6,
   dpi = 300
@@ -854,7 +1199,7 @@ ggsave(
 
 
 # ============================================================
-# 29. UMAP - sample
+# 34. UMAP - SAMPLE
 # ============================================================
 
 p_sample <- DimPlot(
@@ -862,19 +1207,23 @@ p_sample <- DimPlot(
   reduction = "umap.cca",
   group.by = "sample"
 ) +
-  ggtitle("GSE145410 - CCA integrated by sample") +
+  ggtitle(
+    "GSE145410 - CCA integrated by sample"
+  ) +
   theme_classic()
 
+
 ggsave(
-  filename = "figures/05_integration/05_UMAP_CCA_sample.pdf",
-  plot = p_sample,
+  "figures/05_integration/05_UMAP_CCA_sample.pdf",
+  p_sample,
   width = 9,
   height = 6
 )
 
+
 ggsave(
-  filename = "figures/05_integration/05_UMAP_CCA_sample.png",
-  plot = p_sample,
+  "figures/05_integration/05_UMAP_CCA_sample.png",
+  p_sample,
   width = 9,
   height = 6,
   dpi = 300
@@ -882,7 +1231,7 @@ ggsave(
 
 
 # ============================================================
-# 30. UMAP - treatment
+# 35. UMAP - TREATMENT
 # ============================================================
 
 if ("treatment" %in% colnames(object[[]])) {
@@ -892,19 +1241,23 @@ if ("treatment" %in% colnames(object[[]])) {
     reduction = "umap.cca",
     group.by = "treatment"
   ) +
-    ggtitle("GSE145410 - CCA integrated by treatment") +
+    ggtitle(
+      "GSE145410 - CCA integrated by treatment"
+    ) +
     theme_classic()
 
+
   ggsave(
-    filename = "figures/05_integration/05_UMAP_CCA_treatment.pdf",
-    plot = p_treatment,
+    "figures/05_integration/05_UMAP_CCA_treatment.pdf",
+    p_treatment,
     width = 9,
     height = 6
   )
 
+
   ggsave(
-    filename = "figures/05_integration/05_UMAP_CCA_treatment.png",
-    plot = p_treatment,
+    "figures/05_integration/05_UMAP_CCA_treatment.png",
+    p_treatment,
     width = 9,
     height = 6,
     dpi = 300
@@ -913,7 +1266,7 @@ if ("treatment" %in% colnames(object[[]])) {
 
 
 # ============================================================
-# 31. UMAP - replicate
+# 36. UMAP - REPLICATE
 # ============================================================
 
 if ("replicate" %in% colnames(object[[]])) {
@@ -923,19 +1276,23 @@ if ("replicate" %in% colnames(object[[]])) {
     reduction = "umap.cca",
     group.by = "replicate"
   ) +
-    ggtitle("GSE145410 - CCA integrated by replicate") +
+    ggtitle(
+      "GSE145410 - CCA integrated by replicate"
+    ) +
     theme_classic()
 
+
   ggsave(
-    filename = "figures/05_integration/05_UMAP_CCA_replicate.pdf",
-    plot = p_replicate,
+    "figures/05_integration/05_UMAP_CCA_replicate.pdf",
+    p_replicate,
     width = 8,
     height = 6
   )
 
+
   ggsave(
-    filename = "figures/05_integration/05_UMAP_CCA_replicate.png",
-    plot = p_replicate,
+    "figures/05_integration/05_UMAP_CCA_replicate.png",
+    p_replicate,
     width = 8,
     height = 6,
     dpi = 300
@@ -944,33 +1301,41 @@ if ("replicate" %in% colnames(object[[]])) {
 
 
 # ============================================================
-# 32. Integration summary
+# 37. INTEGRATION SUMMARY
 # ============================================================
 
 integration_summary <- data.frame(
+
   parameter = c(
     "input_cells",
     "input_genes",
     "number_of_samples",
     "number_of_HVGs",
     "PCA_dimensions",
-    "CCA_dimensions",
+    "integrated_CCA_dimensions",
     "CCA_k_filter",
     "CCA_k_weight",
-    "cluster_resolution"
+    "cluster_resolution",
+    "integration_runtime_minutes"
   ),
+
   value = c(
     ncol(object),
     nrow(object),
     length(sample_ids),
     length(hvg),
     pca_dims,
-    ncol(integrated_embeddings),
-    50,
-    50,
-    0.4
+    integrated_ndims,
+    CCA_K_FILTER,
+    CCA_K_WEIGHT,
+    CLUSTER_RESOLUTION,
+    round(
+      as.numeric(integration_time),
+      2
+    )
   )
 )
+
 
 write.csv(
   integration_summary,
@@ -980,42 +1345,45 @@ write.csv(
 
 
 # ============================================================
-# 33. Save integrated object
-#
-# IMPORTANT:
-# We keep the RNA layers split here.
-#
-# JoinLayers() will be performed later before differential
-# expression, after annotation/integration analysis.
+# 38. SAVE INTEGRATED OBJECT
 # ============================================================
-
-output_file <- "results/objects/05_integrated.rds"
 
 cat("\n")
 cat("============================================================\n")
-cat("Saving integrated object\n")
+cat("SAVING INTEGRATED OBJECT\n")
 cat("============================================================\n\n")
 
 saveRDS(
   object,
-  output_file,
+  OUTPUT_FILE,
   compress = TRUE
 )
 
-cat("Saved:", output_file, "\n")
+
+cat(
+  "Saved:\n  ",
+  OUTPUT_FILE,
+  "\n",
+  sep = ""
+)
 
 
 # ============================================================
-# 34. Final object diagnostics
+# 39. FINAL DIAGNOSTICS
 # ============================================================
 
 cat("\n")
 cat("============================================================\n")
-cat("FINAL OBJECT\n")
+cat("FINAL OBJECT DIAGNOSTICS\n")
 cat("============================================================\n\n")
 
 cat("Cells:", ncol(object), "\n")
 cat("Genes:", nrow(object), "\n")
+
+cat("\nSamples:\n")
+print(
+  table(object$sample)
+)
 
 cat("\nRNA layers:\n")
 print(
@@ -1034,12 +1402,12 @@ print(
 
 
 # ============================================================
-# 35. Session information
+# 40. SESSION INFORMATION
 # ============================================================
 
 cat("\n")
 cat("============================================================\n")
-cat("Session information\n")
+cat("SESSION INFORMATION\n")
 cat("============================================================\n\n")
 
 print(
@@ -1048,32 +1416,32 @@ print(
 
 
 # ============================================================
-# 36. Completion message
+# 41. COMPLETION
 # ============================================================
 
 cat("\n")
 cat("============================================================\n")
-cat("05_Seurat5_integration.R COMPLETED SUCCESSFULLY\n")
-cat("============================================================\n")
-cat("\n")
+cat("05_Seurat5_integration.R V2 COMPLETED SUCCESSFULLY\n")
+cat("============================================================\n\n")
+
+cat("Input:\n")
+cat("  ", INPUT_FILE, "\n\n", sep = "")
 
 cat("Output:\n")
-cat("  ", output_file, "\n", sep = "")
+cat("  ", OUTPUT_FILE, "\n\n", sep = "")
 
-cat("\nFigures:\n")
-cat("  figures/05_integration/\n")
+cat("Integration:\n")
+cat("  Method            : CCAIntegration\n")
+cat("  HVGs              :", length(hvg), "\n")
+cat("  PCA dimensions    :", N_PCS, "\n")
+cat("  k.filter          :", CCA_K_FILTER, "\n")
+cat("  k.weight          :", CCA_K_WEIGHT, "\n")
+cat("  dims.to.integrate :", N_PCS, "\n")
+cat("  preserve.order    : TRUE\n")
+cat("  sample.tree       : explicit balanced tree\n")
+cat("  cluster resolution:", CLUSTER_RESOLUTION, "\n")
 
-cat("\nTables:\n")
-cat("  results/tables/05_*.csv\n")
-
-cat("\nIntegration:\n")
-cat("  Method       : CCAIntegration\n")
-cat("  PCs          : 20\n")
-cat("  HVGs         : 2000\n")
-cat("  k.filter     : 50\n")
-cat("  k.weight     : 50\n")
-cat("  Resolution   : 0.4\n")
-
-cat("\nNo scAnnoX used.\n")
-cat("No manual Harmony integration used.\n")
+cat("\n")
+cat("No scAnnoX.\n")
+cat("No manual Harmony integration.\n")
 cat("\n")
