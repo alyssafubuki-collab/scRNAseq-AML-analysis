@@ -1,11 +1,12 @@
 # ============================================================
 # 04_PCA_clustering_UMAP.R
-# PCA, neighbors, clustering and UMAP before integration
+# Unintegrated PCA and UMAP
 # ============================================================
 
 source("R/functions.R")
 
 library(Seurat)
+library(SeuratObject)
 library(ggplot2)
 
 project_dir <- get_project_dir()
@@ -19,12 +20,30 @@ object <- readRDS(
   )
 )
 
+# ============================================================
+# PCA
+# ============================================================
+
+message("Running unintegrated PCA...")
+
+object <- ScaleData(
+  object,
+  features = VariableFeatures(object),
+  verbose = FALSE
+)
+
 object <- RunPCA(
   object,
   features = VariableFeatures(object),
   npcs = 30,
   verbose = FALSE
 )
+
+gc()
+
+# ============================================================
+# ELBOW
+# ============================================================
 
 pdf(
   file.path(
@@ -46,11 +65,19 @@ print(
 
 dev.off()
 
+# ============================================================
+# NEIGHBORS
+# ============================================================
+
 object <- FindNeighbors(
   object,
   dims = 1:30,
   verbose = FALSE
 )
+
+# ============================================================
+# CLUSTERS
+# ============================================================
 
 object <- FindClusters(
   object,
@@ -58,15 +85,26 @@ object <- FindClusters(
   verbose = FALSE
 )
 
+# ============================================================
+# UMAP
+# ============================================================
+
 object <- RunUMAP(
   object,
   dims = 1:30,
+  reduction = "pca",
+  reduction.name = "umap.unintegrated",
+  reduction.key = "unintegratedUMAP_",
   verbose = FALSE
 )
 
+# ============================================================
+# PLOTS
+# ============================================================
+
 p1 <- DimPlot(
   object,
-  reduction = "umap",
+  reduction = "umap.unintegrated",
   group.by = "seurat_clusters",
   label = TRUE,
   repel = TRUE
@@ -87,7 +125,7 @@ ggsave(
 
 p2 <- DimPlot(
   object,
-  reduction = "umap",
+  reduction = "umap.unintegrated",
   group.by = "sample"
 )
 
@@ -104,6 +142,13 @@ ggsave(
   dpi = 300
 )
 
+rm(p1, p2)
+gc()
+
+# ============================================================
+# SAVE
+# ============================================================
+
 saveRDS(
   object,
   file.path(
@@ -114,4 +159,4 @@ saveRDS(
   )
 )
 
-message("PCA, clustering and UMAP completed.")
+message("Unintegrated PCA/UMAP completed.")
