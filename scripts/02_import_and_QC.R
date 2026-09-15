@@ -1,6 +1,12 @@
 # ============================================================
 # 02_import_and_QC.R
 # Import all 8 GSE145410 samples and perform adaptive QC
+#
+# Seurat v5 layer policy:
+#   - create one Seurat object per sample
+#   - merge samples
+#   - immediately JoinLayers() once
+#   - keep a clean, unsplit RNA assay until integration
 # ============================================================
 
 source("R/functions.R")
@@ -61,19 +67,17 @@ for (i in seq_len(nrow(metadata))) {
     min.features = 0
   )
 
-  # Make cell names unique before merging
+  # Make cell names globally unique before merging.
   obj <- RenameCells(
     obj,
     add.cell.id = sample_name
   )
 
-  # Metadata
   obj$gsm <- gsm
   obj$sample <- sample_name
   obj$treatment <- metadata$treatment[i]
   obj$replicate <- metadata$replicate[i]
 
-  # Mitochondrial percentage
   obj[["percent.mt"]] <- PercentageFeatureSet(
     obj,
     pattern = "^MT-"
@@ -101,45 +105,41 @@ rm(objects)
 gc()
 
 # ============================================================
-# CLEAN SEURAT v5 LAYERS
+# NORMALIZE SEURAT v5 LAYER STATE
 # ============================================================
 
 message("============================================================")
-message("RNA layers after merge")
+message("RNA layers immediately after merge")
 message("============================================================")
 
-print(
-  Layers(combined[["RNA"]])
+print(Layers(combined[["RNA"]]))
+
+message("Joining RNA layers once after merge...")
+
+combined[["RNA"]] <- JoinLayers(
+  combined[["RNA"]]
 )
 
-# Merge may create multiple count layers.
-# Collapse them immediately.
-if (length(Layers(combined[["RNA"]])) > 1) {
+gc()
 
-  message("Joining RNA layers...")
+final_layers <- Layers(combined[["RNA"]])
 
-  combined[["RNA"]] <- JoinLayers(
-    combined[["RNA"]]
+message("============================================================")
+message("RNA layers after JoinLayers()")
+message("============================================================")
+
+print(final_layers)
+
+if (length(final_layers) > 2L) {
+  stop(
+    "RNA assay still contains split layers after JoinLayers():\n",
+    paste(final_layers, collapse = "\n")
   )
-
-  gc()
 }
 
-message("============================================================")
-message("RNA layers after JoinLayers")
-message("============================================================")
-
-print(
-  Layers(combined[["RNA"]])
-)
-
-# Hard validation
-layer_names <- Layers(combined[["RNA"]])
-
-if (any(grepl("SeuratProject", layer_names))) {
+if (any(grepl("SeuratProject", final_layers))) {
   stop(
-    "Invalid RNA layers detected after JoinLayers:\n",
-    paste(layer_names, collapse = "\n")
+    "Invalid SeuratProject layer names remain after JoinLayers()."
   )
 }
 
@@ -148,16 +148,15 @@ if (any(grepl("SeuratProject", layer_names))) {
 # ============================================================
 
 combined$sample <- factor(
-  combined$sample
+  combined$sample,
+  levels = metadata$sample
 )
 
 message("============================================================")
 message("Sample information")
 message("============================================================")
 
-print(
-  table(combined$sample)
-)
+print(table(combined$sample))
 
 # ============================================================
 # QC BEFORE FILTERING
@@ -206,7 +205,10 @@ ggsave(
 )
 
 # ============================================================
-# ADAPTIVE QC WITH isOutlier()
+# ADAPTIVE QC WITH scuttle::isOutlier()
+#
+# Thresholds are calculated independently by sample.
+# No arbitrary fixed nFeature/nCount/mitochondrial cutoffs.
 # ============================================================
 
 message("============================================================")
@@ -265,18 +267,9 @@ get_thresholds <- function(x, metric_name) {
 }
 
 thresholds <- bind_rows(
-  get_thresholds(
-    qc_counts,
-    "nCount_RNA"
-  ),
-  get_thresholds(
-    qc_features,
-    "nFeature_RNA"
-  ),
-  get_thresholds(
-    qc_mito,
-    "percent.mt"
-  )
+  get_thresholds(qc_counts, "nCount_RNA"),
+  get_thresholds(qc_features, "nFeature_RNA"),
+  get_thresholds(qc_mito, "percent.mt")
 )
 
 write.csv(
@@ -303,15 +296,8 @@ combined <- subset(
 
 cells_after <- ncol(combined)
 
-message(
-  "Cells before QC: ",
-  cells_before
-)
-
-message(
-  "Cells after QC: ",
-  cells_after
-)
+message("Cells before QC: ", cells_before)
+message("Cells after QC: ", cells_after)
 
 # ============================================================
 # REMOVE QC FLAGS
@@ -369,7 +355,7 @@ ggsave(
 )
 
 # ============================================================
-# FINAL LAYER CHECK
+# FINAL LAYER VALIDATION
 # ============================================================
 
 final_layers <- Layers(
@@ -382,6 +368,12 @@ message("============================================================")
 
 print(final_layers)
 
+if (length(final_layers) > 2L) {
+  stop(
+    "Unexpected split RNA layers remain in 02_QC_filtered.rds."
+  )
+}
+
 if (any(grepl("SeuratProject", final_layers))) {
   stop(
     "Invalid SeuratProject layer names remain."
@@ -392,21 +384,22 @@ if (any(grepl("SeuratProject", final_layers))) {
 # SAVE
 # ============================================================
 
-saveRDS(
-  combined,
-  file.path(
-    project_dir,
-    "results",
-    "objects",
-    "02_QC_filtered.rds"
-  )
+output_file <- file.path(
+  project_dir,
+  "results",
+  "objects",
+  "02_QC_filtered.rds"
 )
 
-save_session_info(
-  project_dir
+saveRDS(
+  combined,
+  output_file
 )
+
+save_session_info(project_dir)
 
 message("============================================================")
 message("QC completed successfully")
 message("Cells retained: ", ncol(combined))
+message("Output: ", output_file)
 message("============================================================")

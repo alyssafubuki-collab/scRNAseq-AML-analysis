@@ -1,12 +1,14 @@
 # ============================================================
 # 04_PCA_clustering_UMAP.R
-# Unintegrated PCA and UMAP
+# Unintegrated PCA, neighbors, clustering and UMAP
+#
+# This step is intentionally kept as a pre-integration diagnostic.
+# Only the 2,000 HVGs are scaled.
 # ============================================================
 
 source("R/functions.R")
 
 library(Seurat)
-library(SeuratObject)
 library(ggplot2)
 
 project_dir <- get_project_dir()
@@ -20,11 +22,17 @@ object <- readRDS(
   )
 )
 
+DefaultAssay(object) <- "RNA"
+
+if (length(VariableFeatures(object)) == 0) {
+  stop("No variable features found.")
+}
+
 # ============================================================
-# PCA
+# SCALE ONLY HVGs
 # ============================================================
 
-message("Running unintegrated PCA...")
+message("Scaling 2,000 HVGs for pre-integration PCA...")
 
 object <- ScaleData(
   object,
@@ -32,18 +40,16 @@ object <- ScaleData(
   verbose = FALSE
 )
 
+# ============================================================
+# PCA
+# ============================================================
+
 object <- RunPCA(
   object,
   features = VariableFeatures(object),
-  npcs = 30,
+  npcs = 20,
   verbose = FALSE
 )
-
-gc()
-
-# ============================================================
-# ELBOW
-# ============================================================
 
 pdf(
   file.path(
@@ -59,25 +65,21 @@ pdf(
 print(
   ElbowPlot(
     object,
-    ndims = 30
+    ndims = 20
   )
 )
 
 dev.off()
 
 # ============================================================
-# NEIGHBORS
+# NEIGHBORS + CLUSTERS
 # ============================================================
 
 object <- FindNeighbors(
   object,
-  dims = 1:30,
+  dims = 1:20,
   verbose = FALSE
 )
-
-# ============================================================
-# CLUSTERS
-# ============================================================
 
 object <- FindClusters(
   object,
@@ -91,8 +93,7 @@ object <- FindClusters(
 
 object <- RunUMAP(
   object,
-  dims = 1:30,
-  reduction = "pca",
+  dims = 1:20,
   reduction.name = "umap.unintegrated",
   reduction.key = "unintegratedUMAP_",
   verbose = FALSE
@@ -142,9 +143,6 @@ ggsave(
   dpi = 300
 )
 
-rm(p1, p2)
-gc()
-
 # ============================================================
 # SAVE
 # ============================================================
@@ -159,4 +157,4 @@ saveRDS(
   )
 )
 
-message("Unintegrated PCA/UMAP completed.")
+message("PCA, clustering and unintegrated UMAP completed.")

@@ -1,7 +1,8 @@
 # ============================================================
 # 10_final_figures.R
+# Final portfolio figures
 #
-# Final figures without scAnnoX.
+# No scAnnoX.
 # ============================================================
 
 source("R/functions.R")
@@ -32,9 +33,7 @@ p_cluster <- DimPlot(
   label = TRUE,
   repel = TRUE
 ) +
-  ggtitle(
-    "Integrated scRNA-seq clusters"
-  )
+  ggtitle("Integrated scRNA-seq clusters")
 
 ggsave(
   file.path(
@@ -74,7 +73,7 @@ ggsave(
 )
 
 # ============================================================
-# SINGLER
+# ANNOTATION COMPARISON
 # ============================================================
 
 p1 <- DimPlot(
@@ -86,10 +85,6 @@ p1 <- DimPlot(
 ) +
   ggtitle("SingleR")
 
-# ============================================================
-# SCPRED
-# ============================================================
-
 p2 <- DimPlot(
   object,
   reduction = "umap.integrated",
@@ -99,10 +94,6 @@ p2 <- DimPlot(
 ) +
   ggtitle("scPred")
 
-# ============================================================
-# CONSENSUS
-# ============================================================
-
 p3 <- DimPlot(
   object,
   reduction = "umap.integrated",
@@ -111,10 +102,6 @@ p3 <- DimPlot(
   repel = TRUE
 ) +
   ggtitle("SingleR + scPred consensus")
-
-# ============================================================
-# ANNOTATION PANEL
-# ============================================================
 
 annotation_panel <- (
   p1 | p2
@@ -166,8 +153,10 @@ ggsave(
 # CONSENSUS COUNTS
 # ============================================================
 
-if ("annotation_consensus" %in%
-    colnames(object@meta.data)) {
+if (
+  "annotation_consensus" %in%
+  colnames(object@meta.data)
+) {
 
   counts <- as.data.frame(
     table(object$annotation_consensus)
@@ -211,9 +200,7 @@ if ("annotation_consensus" %in%
 # SESSION INFO
 # ============================================================
 
-save_session_info(
-  project_dir
-)
+save_session_info(project_dir)
 
 message(
   "Final figures generated successfully."

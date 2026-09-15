@@ -1,7 +1,6 @@
 # ============================================================
 # 09_differential_expression.R
-#
-# Differential expression after SingleR + scPred consensus.
+# Differential expression after SingleR + scPred consensus
 # ============================================================
 
 source("R/functions.R")
@@ -21,18 +20,15 @@ object <- readRDS(
   )
 )
 
-# ------------------------------------------------------------
-# JOIN SEURAT v5 RNA LAYERS
-# ------------------------------------------------------------
-
+# Join RNA layers before marker testing.
 object <- JoinLayers(
   object,
   assay = "RNA"
 )
 
-# ------------------------------------------------------------
+# ============================================================
 # CLUSTER MARKERS
-# ------------------------------------------------------------
+# ============================================================
 
 Idents(object) <- "seurat_clusters"
 
@@ -54,10 +50,6 @@ write.csv(
   row.names = FALSE
 )
 
-# ------------------------------------------------------------
-# TOP CLUSTER MARKERS
-# ------------------------------------------------------------
-
 top_markers <- cluster_markers %>%
   group_by(cluster) %>%
   slice_max(
@@ -76,9 +68,9 @@ write.csv(
   row.names = FALSE
 )
 
-# ------------------------------------------------------------
+# ============================================================
 # TREATMENT DE
-# ------------------------------------------------------------
+# ============================================================
 
 Idents(object) <- "treatment"
 
@@ -134,12 +126,14 @@ if (length(treatments) >= 2) {
   }
 }
 
-# ------------------------------------------------------------
+# ============================================================
 # CONSENSUS ANNOTATION MARKERS
-# ------------------------------------------------------------
+# ============================================================
 
-if ("annotation_consensus" %in%
-    colnames(object@meta.data)) {
+if (
+  "annotation_consensus" %in%
+  colnames(object@meta.data)
+) {
 
   valid_cells <- (
     !is.na(object$annotation_consensus) &
@@ -151,9 +145,11 @@ if ("annotation_consensus" %in%
     cells = colnames(object)[valid_cells]
   )
 
-  if (length(unique(
-    annotation_object$annotation_consensus
-  )) >= 2) {
+  if (
+    length(
+      unique(annotation_object$annotation_consensus)
+    ) >= 2
+  ) {
 
     Idents(annotation_object) <-
       "annotation_consensus"
@@ -178,9 +174,9 @@ if ("annotation_consensus" %in%
   }
 }
 
-# ------------------------------------------------------------
+# ============================================================
 # SAVE
-# ------------------------------------------------------------
+# ============================================================
 
 saveRDS(
   object,
@@ -192,6 +188,4 @@ saveRDS(
   )
 )
 
-message(
-  "Differential expression completed."
-)
+message("Differential expression completed.")

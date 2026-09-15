@@ -1,6 +1,10 @@
 # ============================================================
 # 03_normalization_HVG.R
-# Normalization and variable feature selection
+# Log-normalization and highly variable gene selection
+#
+# Deliberately NO ScaleData() here.
+# Scaling is performed only on the 2,000 HVGs in scripts 04/05.
+# This avoids creating a large all-gene scale.data matrix.
 # ============================================================
 
 source("R/functions.R")
@@ -18,30 +22,21 @@ input <- file.path(
   "02_QC_filtered.rds"
 )
 
-# ============================================================
-# LOAD
-# ============================================================
-
-message("============================================================")
-message("Loading QC-filtered object")
-message("============================================================")
-
 object <- readRDS(input)
 
 if (!inherits(object, "Seurat")) {
   stop("Input is not a Seurat object.")
 }
 
+DefaultAssay(object) <- "RNA"
+
+message("============================================================")
+message("Loading QC-filtered object")
+message("============================================================")
 message("Cells: ", ncol(object))
 message("Features: ", nrow(object))
 
-# ============================================================
-# RNA LAYERS
-# ============================================================
-
-rna_layers <- Layers(
-  object[["RNA"]]
-)
+rna_layers <- Layers(object[["RNA"]])
 
 message("RNA layers:")
 print(rna_layers)
@@ -49,6 +44,13 @@ print(rna_layers)
 if (any(grepl("SeuratProject", rna_layers))) {
   stop(
     "Invalid SeuratProject layers detected before normalization."
+  )
+}
+
+if (length(rna_layers) > 2L) {
+  stop(
+    "RNA assay is already split before integration. ",
+    "The layer split must occur only in script 05."
   )
 }
 
@@ -85,12 +87,12 @@ object <- FindVariableFeatures(
 )
 
 message(
-  "HVGs: ",
+  "HVGs selected: ",
   length(VariableFeatures(object))
 )
 
 # ============================================================
-# PLOT
+# HVG PLOT
 # ============================================================
 
 top10 <- head(
@@ -98,9 +100,7 @@ top10 <- head(
   10
 )
 
-p <- VariableFeaturePlot(
-  object
-)
+p <- VariableFeaturePlot(object)
 
 p <- LabelPoints(
   plot = p,
@@ -138,16 +138,19 @@ write.csv(
 # SAVE
 # ============================================================
 
+output_file <- file.path(
+  project_dir,
+  "results",
+  "objects",
+  "03_normalized.rds"
+)
+
 saveRDS(
   object,
-  file.path(
-    project_dir,
-    "results",
-    "objects",
-    "03_normalized.rds"
-  )
+  output_file
 )
 
 message("============================================================")
 message("Normalization and HVG selection completed")
+message("Output: ", output_file)
 message("============================================================")

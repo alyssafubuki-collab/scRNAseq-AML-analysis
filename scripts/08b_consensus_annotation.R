@@ -1,9 +1,6 @@
 # ============================================================
 # 08_consensus_annotation.R
-#
-# Consensus annotation using:
-#   1. SingleR
-#   2. scPred
+# Consensus annotation using SingleR + scPred
 #
 # scAnnoX intentionally excluded.
 # ============================================================
@@ -23,11 +20,11 @@ input <- file.path(
   "07_scPred.rds"
 )
 
-object <- readRDS(input)
+if (!file.exists(input)) {
+  stop("Input object not found: ", input)
+}
 
-# ------------------------------------------------------------
-# CHECK REQUIRED ANNOTATIONS
-# ------------------------------------------------------------
+object <- readRDS(input)
 
 required <- c(
   "SingleR_label",
@@ -47,17 +44,12 @@ if (length(missing) > 0) {
   )
 }
 
-# ------------------------------------------------------------
-# CREATE ANNOTATION TABLE
-# ------------------------------------------------------------
-
 annotation_table <- object@meta.data %>%
   select(
     SingleR = SingleR_label,
     scPred = scPred_label
   )
 
-# Convert NA to explicit unassigned state
 annotation_table$SingleR[
   is.na(annotation_table$SingleR)
 ] <- "unassigned"
@@ -66,19 +58,19 @@ annotation_table$scPred[
   is.na(annotation_table$scPred)
 ] <- "unassigned"
 
-# ------------------------------------------------------------
-# PAIRWISE AGREEMENT
-# ------------------------------------------------------------
-
 valid <- (
   annotation_table$SingleR != "unassigned" &
   annotation_table$scPred != "unassigned"
 )
 
-agreement <- mean(
-  annotation_table$SingleR[valid] ==
-    annotation_table$scPred[valid]
-)
+if (sum(valid) == 0) {
+  agreement <- NA_real_
+} else {
+  agreement <- mean(
+    annotation_table$SingleR[valid] ==
+      annotation_table$scPred[valid]
+  )
+}
 
 agreement_table <- data.frame(
   comparison = "SingleR_vs_scPred",
@@ -97,19 +89,9 @@ write.csv(
   row.names = FALSE
 )
 
-# ------------------------------------------------------------
-# CONSENSUS
-#
-# With only two annotation methods:
-#
-# - same prediction -> consensus
-# - different predictions -> unassigned
-# - one method unassigned -> use the other only if desired
-#
-# Here we use the conservative approach:
-# disagreement = unassigned.
-# ------------------------------------------------------------
-
+# Conservative two-method consensus:
+# identical non-unassigned labels are retained;
+# disagreements remain unassigned.
 annotation_table$consensus <- "unassigned"
 
 same_prediction <- (
@@ -124,18 +106,8 @@ annotation_table$consensus[
   same_prediction
 ]
 
-# ------------------------------------------------------------
-# OPTIONAL SINGLE-METHOD LABEL
-#
-# Keep the individual annotations available for inspection.
-# ------------------------------------------------------------
-
 object$annotation_consensus <-
   annotation_table$consensus
-
-# ------------------------------------------------------------
-# SAVE PER-CELL ANNOTATIONS
-# ------------------------------------------------------------
 
 write.csv(
   data.frame(
@@ -151,14 +123,8 @@ write.csv(
   row.names = FALSE
 )
 
-# ------------------------------------------------------------
-# CONSENSUS COUNTS
-# ------------------------------------------------------------
-
 consensus_counts <- as.data.frame(
-  table(
-    object$annotation_consensus
-  )
+  table(object$annotation_consensus)
 )
 
 colnames(consensus_counts) <- c(
@@ -176,10 +142,6 @@ write.csv(
   ),
   row.names = FALSE
 )
-
-# ------------------------------------------------------------
-# SINGLE METHOD COUNTS
-# ------------------------------------------------------------
 
 singleR_counts <- as.data.frame(
   table(object$SingleR_label)
@@ -221,17 +183,12 @@ write.csv(
   row.names = FALSE
 )
 
-# ------------------------------------------------------------
-# CONSENSUS UMAP
-# ------------------------------------------------------------
-
 p <- DimPlot(
   object,
   reduction = "umap.integrated",
   group.by = "annotation_consensus",
   label = TRUE,
-  repel = TRUE,
-  na.value = "grey80"
+  repel = TRUE
 )
 
 ggsave(
@@ -246,10 +203,6 @@ ggsave(
   height = 7,
   dpi = 300
 )
-
-# ------------------------------------------------------------
-# SAVE OBJECT
-# ------------------------------------------------------------
 
 saveRDS(
   object,
@@ -267,6 +220,9 @@ message(
 
 message(
   "SingleR/scPred agreement: ",
-  round(agreement * 100, 2),
-  "%"
+  ifelse(
+    is.na(agreement),
+    "NA",
+    paste0(round(agreement * 100, 2), "%")
+  )
 )
