@@ -1,6 +1,8 @@
 # ============================================================
-# 08_consensus_annotation.R
-# Consensus annotation using SingleR + scPred
+# 08b_consensus_annotation.R
+#
+# Consensus annotation:
+#   SingleR + scPred
 #
 # scAnnoX intentionally excluded.
 # ============================================================
@@ -21,10 +23,17 @@ input <- file.path(
 )
 
 if (!file.exists(input)) {
-  stop("Input object not found: ", input)
+  stop(
+    "Input object not found: ",
+    input
+  )
 }
 
 object <- readRDS(input)
+
+# ============================================================
+# VALIDATION
+# ============================================================
 
 required <- c(
   "SingleR_label",
@@ -39,10 +48,13 @@ missing <- setdiff(
 if (length(missing) > 0) {
   stop(
     "Missing annotation columns: ",
-    paste(missing, collapse = ", "),
-    "\nRun scripts 06 and 07 first."
+    paste(missing, collapse = ", ")
   )
 }
+
+# ============================================================
+# ANNOTATION TABLE
+# ============================================================
 
 annotation_table <- object@meta.data %>%
   select(
@@ -58,14 +70,21 @@ annotation_table$scPred[
   is.na(annotation_table$scPred)
 ] <- "unassigned"
 
+# ============================================================
+# AGREEMENT
+# ============================================================
+
 valid <- (
   annotation_table$SingleR != "unassigned" &
   annotation_table$scPred != "unassigned"
 )
 
 if (sum(valid) == 0) {
+
   agreement <- NA_real_
+
 } else {
+
   agreement <- mean(
     annotation_table$SingleR[valid] ==
       annotation_table$scPred[valid]
@@ -89,9 +108,13 @@ write.csv(
   row.names = FALSE
 )
 
-# Conservative two-method consensus:
-# identical non-unassigned labels are retained;
-# disagreements remain unassigned.
+# ============================================================
+# CONSERVATIVE CONSENSUS
+#
+# Agreement → label
+# Disagreement → unassigned
+# ============================================================
+
 annotation_table$consensus <- "unassigned"
 
 same_prediction <- (
@@ -109,6 +132,10 @@ annotation_table$consensus[
 object$annotation_consensus <-
   annotation_table$consensus
 
+# ============================================================
+# PER-CELL TABLE
+# ============================================================
+
 write.csv(
   data.frame(
     cell = rownames(annotation_table),
@@ -122,6 +149,10 @@ write.csv(
   ),
   row.names = FALSE
 )
+
+# ============================================================
+# COUNTS
+# ============================================================
 
 consensus_counts <- as.data.frame(
   table(object$annotation_consensus)
@@ -143,6 +174,7 @@ write.csv(
   row.names = FALSE
 )
 
+# SingleR counts
 singleR_counts <- as.data.frame(
   table(object$SingleR_label)
 )
@@ -163,6 +195,7 @@ write.csv(
   row.names = FALSE
 )
 
+# scPred counts
 scPred_counts <- as.data.frame(
   table(object$scPred_label)
 )
@@ -183,46 +216,68 @@ write.csv(
   row.names = FALSE
 )
 
-p <- DimPlot(
-  object,
-  reduction = "umap.integrated",
-  group.by = "annotation_consensus",
-  label = TRUE,
-  repel = TRUE
-)
+# ============================================================
+# UMAP
+# ============================================================
 
-ggsave(
-  file.path(
-    project_dir,
-    "figures",
-    "annotation",
-    "annotation_consensus_UMAP.png"
-  ),
-  p,
-  width = 10,
-  height = 7,
-  dpi = 300
+if ("umap.integrated" %in% Reductions(object)) {
+
+  p <- DimPlot(
+    object,
+    reduction = "umap.integrated",
+    group.by = "annotation_consensus",
+    label = TRUE,
+    repel = TRUE,
+    na.value = "grey80"
+  )
+
+  ggsave(
+    file.path(
+      project_dir,
+      "figures",
+      "annotation",
+      "annotation_consensus_UMAP.png"
+    ),
+    p,
+    width = 10,
+    height = 7,
+    dpi = 300
+  )
+}
+
+# ============================================================
+# SAVE
+# ============================================================
+
+output <- file.path(
+  project_dir,
+  "results",
+  "objects",
+  "08_annotation_consensus.rds"
 )
 
 saveRDS(
   object,
-  file.path(
-    project_dir,
-    "results",
-    "objects",
-    "08_annotation_consensus.rds"
-  )
+  output
 )
 
-message(
-  "Consensus annotation completed."
-)
+message("============================================================")
+message("Consensus annotation completed")
+message("============================================================")
 
 message(
   "SingleR/scPred agreement: ",
   ifelse(
     is.na(agreement),
     "NA",
-    paste0(round(agreement * 100, 2), "%")
+    paste0(
+      round(agreement * 100, 2),
+      "%"
+    )
   )
+)
+
+message(
+  "Output: ",
+  output
 )
