@@ -286,7 +286,18 @@ jobs:
       # ==========================================================
       # 14. SEURAT v5 CCA INTEGRATION
       # ==========================================================
+      
+      - name: Runner resources before Seurat integration
+        run: |
+            echo "===== CPU ====="
+             nproc
 
+            echo "===== MEMORY ====="
+            free -h
+
+            echo "===== DISK ====="
+                df -h
+    
       - name: Seurat v5 CCA integration
         run: |
           set -euo pipefail
