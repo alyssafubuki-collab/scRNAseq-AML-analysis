@@ -1,18 +1,22 @@
 # ============================================================
 # 05_Seurat5_integration.R
+#
 # Seurat v5 CCA integration
 #
-# Layer policy:
-#   1. 02 merges samples and joins layers.
-#   2. 03 keeps RNA unsplit.
-#   3. 05 is the ONLY script that splits RNA by sample.
-#
-# Resource-conscious settings:
-#   - 2,000 HVGs
-#   - 20 PCs
-#   - 20 integrated dimensions
-#   - k.weight = 50
-#   - ScaleData only on HVGs
+# Pipeline:
+#   clean RNA layers
+#       ↓
+#   split by sample
+#       ↓
+#   NormalizeData per layer
+#       ↓
+#   FindVariableFeatures
+#       ↓
+#   ScaleData on HVGs
+#       ↓
+#   PCA
+#       ↓
+#   CCAIntegration
 #
 # No scAnnoX.
 # ============================================================
@@ -25,59 +29,139 @@ library(ggplot2)
 
 project_dir <- get_project_dir()
 
-input_file <- file.path(
+input <- file.path(
   project_dir,
   "results",
   "objects",
   "03_normalized.rds"
 )
 
-if (!file.exists(input_file)) {
-  stop("Input object not found: ", input_file)
+if (!file.exists(input)) {
+  stop(
+    "Input object not found: ",
+    input
+  )
 }
 
-object <- readRDS(input_file)
+# ============================================================
+# LOAD
+# ============================================================
+
+message("============================================================")
+message("Loading normalized Seurat object")
+message("============================================================")
+
+object <- readRDS(input)
 
 if (!inherits(object, "Seurat")) {
-  stop("03_normalized.rds does not contain a Seurat object.")
+  stop(
+    "03_normalized.rds does not contain a Seurat object."
+  )
 }
 
 DefaultAssay(object) <- "RNA"
 
+message(
+  "Cells: ",
+  ncol(object)
+)
+
+message(
+  "Features: ",
+  nrow(object)
+)
+
+# ============================================================
+# METADATA VALIDATION
+# ============================================================
+
 if (!"sample" %in% colnames(object[[]])) {
-  stop("Metadata column 'sample' is missing.")
+  stop(
+    "Metadata column 'sample' is missing."
+  )
 }
 
 if (any(is.na(object$sample))) {
-  stop("The 'sample' metadata contains NA values.")
+  stop(
+    "sample metadata contains NA values."
+  )
+}
+
+sample_counts <- table(object$sample)
+
+message("============================================================")
+message("Cells per sample")
+message("============================================================")
+
+print(sample_counts)
+
+if (length(sample_counts) != 8) {
+  warning(
+    "Expected 8 samples, found ",
+    length(sample_counts)
+  )
+}
+
+if (any(sample_counts < 50)) {
+  stop(
+    "At least one sample contains fewer than 50 cells. ",
+    "CCA integration cannot be safely performed."
+  )
 }
 
 # ============================================================
-# VALIDATE PRE-INTEGRATION LAYERS
+# INITIAL LAYERS
 # ============================================================
-
-rna_layers <- Layers(object[["RNA"]])
 
 message("============================================================")
 message("RNA layers before integration")
 message("============================================================")
-print(rna_layers)
 
-if (any(grepl("SeuratProject", rna_layers))) {
+initial_layers <- Layers(
+  object[["RNA"]]
+)
+
+print(initial_layers)
+
+if (any(grepl("SeuratProject", initial_layers))) {
   stop(
-    "Invalid SeuratProject layers detected before integration."
+    "Invalid SeuratProject layers detected."
   )
 }
 
-if (length(rna_layers) > 2L) {
+# We expect the object to be joined before integration.
+if (!all(
+  c("counts", "data") %in% initial_layers
+)) {
+
+  message(
+    "RNA layers are not in the expected joined state."
+  )
+
+  message(
+    "Attempting JoinLayers() once before splitting."
+  )
+
+  object[["RNA"]] <- JoinLayers(
+    object[["RNA"]]
+  )
+}
+
+joined_layers <- Layers(
+  object[["RNA"]]
+)
+
+message("RNA layers after validation:")
+print(joined_layers)
+
+if (!"counts" %in% joined_layers) {
   stop(
-    "RNA is already split before script 05. ",
-    "This indicates a broken upstream layer state."
+    "A counts layer is required before integration."
   )
 }
 
 # ============================================================
-# SPLIT ONCE BY SAMPLE
+# SPLIT BY SAMPLE
 # ============================================================
 
 message("============================================================")
@@ -89,18 +173,65 @@ object[["RNA"]] <- split(
   f = object$sample
 )
 
-split_layers <- Layers(object[["RNA"]])
+split_layers <- Layers(
+  object[["RNA"]]
+)
 
+message("RNA layers after split:")
 print(split_layers)
 
-if (length(split_layers) < 3L) {
+data_layers <- Layers(
+  object[["RNA"]],
+  search = "^data\\."
+)
+
+counts_layers <- Layers(
+  object[["RNA"]],
+  search = "^counts\\."
+)
+
+message("Normalized data layers:")
+print(data_layers)
+
+message("Counts layers:")
+print(counts_layers)
+
+if (length(data_layers) != 8) {
   stop(
-    "RNA assay was not split into sample-specific layers."
+    "Expected 8 normalized data layers after split, found ",
+    length(data_layers)
+  )
+}
+
+if (length(counts_layers) != 8) {
+  stop(
+    "Expected 8 counts layers after split, found ",
+    length(counts_layers)
   )
 }
 
 # ============================================================
-# HVG SELECTION
+# NORMALIZE EACH SAMPLE LAYER
+#
+# This follows the Seurat v5 integration workflow:
+# split → NormalizeData → FindVariableFeatures → ScaleData → PCA
+# ============================================================
+
+message("============================================================")
+message("Re-normalizing split RNA layers")
+message("============================================================")
+
+object <- NormalizeData(
+  object,
+  normalization.method = "LogNormalize",
+  scale.factor = 10000,
+  verbose = FALSE
+)
+
+gc()
+
+# ============================================================
+# VARIABLE FEATURES
 # ============================================================
 
 message("============================================================")
@@ -114,8 +245,22 @@ object <- FindVariableFeatures(
   verbose = FALSE
 )
 
+hvg <- VariableFeatures(object)
+
+message(
+  "Number of HVGs: ",
+  length(hvg)
+)
+
+if (length(hvg) < 2000) {
+  warning(
+    "Fewer than 2,000 HVGs were returned: ",
+    length(hvg)
+  )
+}
+
 # ============================================================
-# SCALE ONLY HVGs
+# SCALE HVGs ONLY
 # ============================================================
 
 message("============================================================")
@@ -124,11 +269,30 @@ message("============================================================")
 
 object <- ScaleData(
   object,
-  features = VariableFeatures(object),
+  features = hvg,
   verbose = FALSE
 )
 
 gc()
+
+# ============================================================
+# VALIDATE SCALE LAYERS
+# ============================================================
+
+scale_layers <- Layers(
+  object[["RNA"]],
+  search = "^scale\\.data\\."
+)
+
+message("Scale layers:")
+print(scale_layers)
+
+if (length(scale_layers) != 8) {
+  stop(
+    "Expected 8 scale.data layers, found ",
+    length(scale_layers)
+  )
+}
 
 # ============================================================
 # PCA
@@ -140,10 +304,29 @@ message("============================================================")
 
 object <- RunPCA(
   object,
-  features = VariableFeatures(object),
+  features = hvg,
   npcs = 20,
   verbose = FALSE
 )
+
+if (!"pca" %in% Reductions(object)) {
+  stop(
+    "PCA reduction was not created."
+  )
+}
+
+pca_cells <- nrow(
+  Embeddings(
+    object,
+    reduction = "pca"
+  )
+)
+
+if (pca_cells != ncol(object)) {
+  stop(
+    "PCA cell count does not match Seurat object."
+  )
+}
 
 # ============================================================
 # CCA INTEGRATION
@@ -152,24 +335,127 @@ object <- RunPCA(
 message("============================================================")
 message("Running Seurat v5 CCA integration")
 message("============================================================")
-message("Parameters: dims=1:20, dims.to.integrate=20, k.weight=50")
 
-object <- IntegrateLayers(
-  object = object,
-  method = CCAIntegration,
-  orig.reduction = "pca",
-  new.reduction = "integrated.cca",
-  dims = 1:20,
-  dims.to.integrate = 20,
-  k.weight = 50,
-  verbose = FALSE
+message(
+  "Parameters:",
+  " dims=1:20",
+  ", k.filter=50",
+  ", k.weight=50"
 )
 
 gc()
 
+object <- tryCatch(
+
+  IntegrateLayers(
+    object = object,
+    method = CCAIntegration,
+    orig.reduction = "pca",
+    new.reduction = "integrated.cca",
+    assay = "RNA",
+    features = hvg,
+    layers = data_layers,
+    scale.layer = scale_layers,
+    dims = 1:20,
+    k.filter = 50,
+    k.weight = 50,
+    verbose = TRUE
+  ),
+
+  error = function(e) {
+
+    message("============================================================")
+    message("CCA INTEGRATION FAILED")
+    message("============================================================")
+
+    message(
+      "Error message:"
+    )
+
+    message(
+      conditionMessage(e)
+    )
+
+    message("------------------------------------------------------------")
+    message("RNA layers:")
+    print(
+      Layers(object[["RNA"]])
+    )
+
+    message("------------------------------------------------------------")
+    message("Data layers:")
+    print(
+      Layers(
+        object[["RNA"]],
+        search = "^data\\."
+      )
+    )
+
+    message("------------------------------------------------------------")
+    message("Scale layers:")
+    print(
+      Layers(
+        object[["RNA"]],
+        search = "^scale\\.data\\."
+      )
+    )
+
+    message("------------------------------------------------------------")
+    message("PCA:")
+    print(
+      object[["pca"]]
+    )
+
+    stop(
+      "Seurat CCAIntegration failed: ",
+      conditionMessage(e)
+    )
+  }
+)
+
 # ============================================================
-# INTEGRATED NEIGHBORS
+# VALIDATE CCA
 # ============================================================
+
+if (!"integrated.cca" %in% Reductions(object)) {
+  stop(
+    "CCA integration did not create integrated.cca."
+  )
+}
+
+cca_embeddings <- Embeddings(
+  object,
+  reduction = "integrated.cca"
+)
+
+message("============================================================")
+message("CCA integration successful")
+message("============================================================")
+
+message(
+  "Integrated cells: ",
+  nrow(cca_embeddings)
+)
+
+message(
+  "Integrated dimensions: ",
+  ncol(cca_embeddings)
+)
+
+if (nrow(cca_embeddings) != ncol(object)) {
+  stop(
+    "integrated.cca contains a different number of cells ",
+    "than the Seurat object."
+  )
+}
+
+# ============================================================
+# NEIGHBORS
+# ============================================================
+
+message("============================================================")
+message("Finding integrated neighbors")
+message("============================================================")
 
 object <- FindNeighbors(
   object,
@@ -178,6 +464,14 @@ object <- FindNeighbors(
   verbose = FALSE
 )
 
+# ============================================================
+# CLUSTERS
+# ============================================================
+
+message("============================================================")
+message("Finding clusters")
+message("============================================================")
+
 object <- FindClusters(
   object,
   resolution = 0.4,
@@ -185,8 +479,12 @@ object <- FindClusters(
 )
 
 # ============================================================
-# INTEGRATED UMAP
+# UMAP
 # ============================================================
+
+message("============================================================")
+message("Running integrated UMAP")
+message("============================================================")
 
 object <- RunUMAP(
   object,
@@ -198,7 +496,7 @@ object <- RunUMAP(
 )
 
 # ============================================================
-# FIGURES
+# FIGURE DIRECTORY
 # ============================================================
 
 dir.create(
@@ -210,6 +508,10 @@ dir.create(
   recursive = TRUE,
   showWarnings = FALSE
 )
+
+# ============================================================
+# UMAP BY SAMPLE
+# ============================================================
 
 p1 <- DimPlot(
   object,
@@ -230,24 +532,35 @@ ggsave(
   dpi = 300
 )
 
-p2 <- DimPlot(
-  object,
-  reduction = "umap.integrated",
-  group.by = "treatment"
-)
+# ============================================================
+# UMAP BY TREATMENT
+# ============================================================
 
-ggsave(
-  file.path(
-    project_dir,
-    "figures",
-    "integration",
-    "UMAP_integrated_treatment.png"
-  ),
-  p2,
-  width = 8,
-  height = 6,
-  dpi = 300
-)
+if ("treatment" %in% colnames(object[[]])) {
+
+  p2 <- DimPlot(
+    object,
+    reduction = "umap.integrated",
+    group.by = "treatment"
+  )
+
+  ggsave(
+    file.path(
+      project_dir,
+      "figures",
+      "integration",
+      "UMAP_integrated_treatment.png"
+    ),
+    p2,
+    width = 8,
+    height = 6,
+    dpi = 300
+  )
+}
+
+# ============================================================
+# UMAP BY CLUSTER
+# ============================================================
 
 p3 <- DimPlot(
   object,
@@ -274,7 +587,7 @@ ggsave(
 # SAVE
 # ============================================================
 
-output_file <- file.path(
+output <- file.path(
   project_dir,
   "results",
   "objects",
@@ -283,21 +596,36 @@ output_file <- file.path(
 
 saveRDS(
   object,
-  output_file
+  output
 )
-
-if (!file.exists(output_file)) {
-  stop("Failed to save integrated Seurat object.")
-}
 
 message("============================================================")
 message("Integration completed successfully")
-message("Output: ", output_file)
-message("Cells: ", ncol(object))
+message("============================================================")
+
+message(
+  "Output: ",
+  output
+)
+
+message(
+  "Cells: ",
+  ncol(object)
+)
+
 message(
   "Clusters: ",
-  length(unique(object$seurat_clusters))
+  length(
+    unique(
+      object$seurat_clusters
+    )
+  )
 )
-message("Available reductions:")
-print(Reductions(object))
-message("============================================================")
+
+message(
+  "Available reductions:"
+)
+
+print(
+  Reductions(object)
+)
