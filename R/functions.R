@@ -1,12 +1,9 @@
 # ============================================================
 # functions.R
-# Reusable functions
+# Reusable functions for the AML scRNA-seq portfolio
 # ============================================================
 
 get_project_dir <- function() {
-
-  # Works when scripts are launched from the repository root.
-  # If launched from an RStudio project, getwd() is normally the root.
 
   project_dir <- normalizePath(
     getwd(),
@@ -17,7 +14,8 @@ get_project_dir <- function() {
   if (!dir.exists(file.path(project_dir, "scripts"))) {
     stop(
       "Project root not detected.\n",
-      "Run the scripts from the repository root or open the repository as an RStudio project."
+      "Run the scripts from the repository root or open ",
+      "the repository as an RStudio project."
     )
   }
 
@@ -112,6 +110,108 @@ find_10x_file <- function(sample_dir, pattern) {
 }
 
 
+copy_10x_file <- function(
+  source_file,
+  destination_file
+) {
+
+  if (is.na(source_file) || !file.exists(source_file)) {
+    stop(
+      "10X source file not found: ",
+      source_file
+    )
+  }
+
+  source_is_gz <- grepl(
+    "\\.gz$",
+    source_file,
+    ignore.case = TRUE
+  )
+
+  destination_is_gz <- grepl(
+    "\\.gz$",
+    destination_file,
+    ignore.case = TRUE
+  )
+
+  if (source_is_gz && destination_is_gz) {
+
+    ok <- file.copy(
+      source_file,
+      destination_file,
+      overwrite = TRUE
+    )
+
+  } else if (!source_is_gz && !destination_is_gz) {
+
+    ok <- file.copy(
+      source_file,
+      destination_file,
+      overwrite = TRUE
+    )
+
+  } else if (!source_is_gz && destination_is_gz) {
+
+    con_in <- file(
+      source_file,
+      open = "rb"
+    )
+
+    con_out <- gzfile(
+      destination_file,
+      open = "wb"
+    )
+
+    ok <- FALSE
+
+    tryCatch(
+      {
+        repeat {
+          chunk <- readBin(
+            con_in,
+            what = "raw",
+            n = 1024^2
+          )
+
+          if (length(chunk) == 0) {
+            break
+          }
+
+          writeBin(
+            chunk,
+            con_out
+          )
+        }
+
+        ok <- TRUE
+      },
+      finally = {
+        close(con_in)
+        close(con_out)
+      }
+    )
+
+  } else {
+
+    stop(
+      "Unsupported 10X compression conversion: ",
+      source_file,
+      " -> ",
+      destination_file
+    )
+  }
+
+  if (!isTRUE(ok)) {
+    stop(
+      "Failed to copy 10X file: ",
+      source_file
+    )
+  }
+
+  invisible(destination_file)
+}
+
+
 read_gse145410_sample <- function(sample_dir) {
 
   matrix_file <- find_10x_file(
@@ -129,30 +229,62 @@ read_gse145410_sample <- function(sample_dir) {
     "(features|genes)\\.tsv(\\.gz)?$"
   )
 
-  if (any(is.na(c(matrix_file, barcode_file, feature_file)))) {
+  if (any(is.na(
+    c(
+      matrix_file,
+      barcode_file,
+      feature_file
+    )
+  ))) {
     stop(
       "Incomplete 10X files in: ",
       sample_dir
     )
   }
 
-  # Read10X expects a directory containing the standard files.
-  # We create a temporary standardized directory.
   tmp <- tempfile("10x_")
   dir.create(tmp)
 
-  file.copy(matrix_file, file.path(tmp, "matrix.mtx.gz"))
-  file.copy(barcode_file, file.path(tmp, "barcodes.tsv.gz"))
-  file.copy(feature_file, file.path(tmp, "features.tsv.gz"))
+  on.exit(
+    unlink(
+      tmp,
+      recursive = TRUE,
+      force = TRUE
+    ),
+    add = TRUE
+  )
+
+  copy_10x_file(
+    matrix_file,
+    file.path(
+      tmp,
+      "matrix.mtx.gz"
+    )
+  )
+
+  copy_10x_file(
+    barcode_file,
+    file.path(
+      tmp,
+      "barcodes.tsv.gz"
+    )
+  )
+
+  copy_10x_file(
+    feature_file,
+    file.path(
+      tmp,
+      "features.tsv.gz"
+    )
+  )
 
   counts <- Seurat::Read10X(
     data.dir = tmp,
     gene.column = 2
   )
 
-  unlink(tmp, recursive = TRUE)
-
   if (is.list(counts)) {
+
     if ("Gene Expression" %in% names(counts)) {
       counts <- counts[["Gene Expression"]]
     } else {
