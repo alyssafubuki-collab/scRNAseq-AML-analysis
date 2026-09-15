@@ -1,34 +1,63 @@
 # ============================================================
-# 09_differential_expression.R
-# Differential expression after SingleR + scPred consensus
+# 09b_differential_expression.R
+#
+# Differential expression after consensus annotation
 # ============================================================
 
 source("R/functions.R")
 
 library(Seurat)
+library(SeuratObject)
 library(dplyr)
 library(ggplot2)
 
 project_dir <- get_project_dir()
 
-object <- readRDS(
-  file.path(
-    project_dir,
-    "results",
-    "objects",
-    "08_annotation_consensus.rds"
-  )
+input <- file.path(
+  project_dir,
+  "results",
+  "objects",
+  "08_annotation_consensus.rds"
 )
 
-# Join RNA layers before marker testing.
-object <- JoinLayers(
-  object,
-  assay = "RNA"
+if (!file.exists(input)) {
+  stop(
+    "Input object not found: ",
+    input
+  )
+}
+
+object <- readRDS(input)
+
+if (!inherits(object, "Seurat")) {
+  stop("Input is not a Seurat object.")
+}
+
+DefaultAssay(object) <- "RNA"
+
+# ============================================================
+# JOIN RNA LAYERS
+# ============================================================
+
+message("============================================================")
+message("Joining RNA layers before differential expression")
+message("============================================================")
+
+object[["RNA"]] <- JoinLayers(
+  object[["RNA"]]
+)
+
+print(
+  Layers(object[["RNA"]])
 )
 
 # ============================================================
 # CLUSTER MARKERS
 # ============================================================
+
+message("============================================================")
+message("Cluster marker analysis")
+message("============================================================")
 
 Idents(object) <- "seurat_clusters"
 
@@ -72,56 +101,69 @@ write.csv(
 # TREATMENT DE
 # ============================================================
 
-Idents(object) <- "treatment"
+if (!"treatment" %in% colnames(object@meta.data)) {
 
-treatments <- levels(
-  factor(object$treatment)
-)
+  warning(
+    "Treatment metadata not found. Treatment DE skipped."
+  )
 
-if (length(treatments) >= 2) {
+} else {
 
-  for (i in seq_len(length(treatments) - 1)) {
+  message("============================================================")
+  message("Treatment differential expression")
+  message("============================================================")
 
-    for (j in (i + 1):length(treatments)) {
+  Idents(object) <- "treatment"
 
-      a <- treatments[i]
-      b <- treatments[j]
+  treatments <- levels(
+    factor(object$treatment)
+  )
 
-      message(
-        "DE: ",
-        a,
-        " vs ",
-        b
-      )
+  if (length(treatments) >= 2) {
 
-      de <- FindMarkers(
-        object,
-        ident.1 = a,
-        ident.2 = b,
-        min.pct = 0.10,
-        logfc.threshold = 0.25
-      )
+    for (i in seq_len(length(treatments) - 1)) {
 
-      de$gene <- rownames(de)
+      for (j in (i + 1):length(treatments)) {
 
-      filename <- paste0(
-        "DE_",
-        make.names(a),
-        "_vs_",
-        make.names(b),
-        ".csv"
-      )
+        a <- treatments[i]
+        b <- treatments[j]
 
-      write.csv(
-        de,
-        file.path(
-          project_dir,
-          "results",
-          "differential_expression",
-          filename
-        ),
-        row.names = FALSE
-      )
+        message(
+          "DE: ",
+          a,
+          " vs ",
+          b
+        )
+
+        de <- FindMarkers(
+          object,
+          ident.1 = a,
+          ident.2 = b,
+          min.pct = 0.10,
+          logfc.threshold = 0.25
+        )
+
+        de$gene <- rownames(de)
+
+        filename <- paste0(
+          "DE_",
+          make.names(a),
+          "_vs_",
+          make.names(b),
+          ".csv"
+        )
+
+        write.csv(
+          de,
+          file.path(
+            project_dir,
+            "results",
+            "differential_expression",
+            filename
+          ),
+          row.names = FALSE
+        )
+      }
     }
   }
 }
@@ -147,7 +189,9 @@ if (
 
   if (
     length(
-      unique(annotation_object$annotation_consensus)
+      unique(
+        annotation_object$annotation_consensus
+      )
     ) >= 2
   ) {
 
@@ -178,14 +222,19 @@ if (
 # SAVE
 # ============================================================
 
-saveRDS(
-  object,
-  file.path(
-    project_dir,
-    "results",
-    "objects",
-    "09_DE_ready.rds"
-  )
+output <- file.path(
+  project_dir,
+  "results",
+  "objects",
+  "09_DE_ready.rds"
 )
 
-message("Differential expression completed.")
+saveRDS(
+  object,
+  output
+)
+
+message("============================================================")
+message("Differential expression completed")
+message("Output: ", output)
+message("============================================================")
