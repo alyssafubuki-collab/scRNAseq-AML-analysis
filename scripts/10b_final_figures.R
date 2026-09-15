@@ -1,5 +1,6 @@
 # ============================================================
-# 10_final_figures.R
+# 10b_final_figures.R
+#
 # Final portfolio figures
 #
 # No scAnnoX.
@@ -13,144 +14,196 @@ library(patchwork)
 
 project_dir <- get_project_dir()
 
-object <- readRDS(
-  file.path(
-    project_dir,
-    "results",
-    "objects",
-    "09_DE_ready.rds"
-  )
+input <- file.path(
+  project_dir,
+  "results",
+  "objects",
+  "09_DE_ready.rds"
 )
+
+if (!file.exists(input)) {
+  stop(
+    "Input object not found: ",
+    input
+  )
+}
+
+object <- readRDS(input)
 
 # ============================================================
 # INTEGRATED CLUSTERS
 # ============================================================
 
-p_cluster <- DimPlot(
-  object,
-  reduction = "umap.integrated",
-  group.by = "seurat_clusters",
-  label = TRUE,
-  repel = TRUE
-) +
-  ggtitle("Integrated scRNA-seq clusters")
+if ("umap.integrated" %in% Reductions(object)) {
 
-ggsave(
-  file.path(
-    project_dir,
-    "figures",
-    "integration",
-    "FINAL_integrated_clusters.png"
-  ),
-  p_cluster,
-  width = 8,
-  height = 6,
-  dpi = 300
-)
+  p_cluster <- DimPlot(
+    object,
+    reduction = "umap.integrated",
+    group.by = "seurat_clusters",
+    label = TRUE,
+    repel = TRUE
+  ) +
+    ggtitle(
+      "Integrated scRNA-seq clusters"
+    )
+
+  ggsave(
+    file.path(
+      project_dir,
+      "figures",
+      "integration",
+      "FINAL_integrated_clusters.png"
+    ),
+    p_cluster,
+    width = 8,
+    height = 6,
+    dpi = 300
+  )
+}
 
 # ============================================================
 # TREATMENT
 # ============================================================
 
-p_treatment <- DimPlot(
-  object,
-  reduction = "umap.integrated",
-  group.by = "treatment"
-) +
-  ggtitle("Treatment")
+if (
+  "treatment" %in%
+  colnames(object@meta.data) &&
+  "umap.integrated" %in% Reductions(object)
+) {
 
-ggsave(
-  file.path(
-    project_dir,
-    "figures",
-    "integration",
-    "FINAL_integrated_treatment.png"
-  ),
-  p_treatment,
-  width = 8,
-  height = 6,
-  dpi = 300
-)
+  p_treatment <- DimPlot(
+    object,
+    reduction = "umap.integrated",
+    group.by = "treatment"
+  ) +
+    ggtitle(
+      "Treatment"
+    )
+
+  ggsave(
+    file.path(
+      project_dir,
+      "figures",
+      "integration",
+      "FINAL_integrated_treatment.png"
+    ),
+    p_treatment,
+    width = 8,
+    height = 6,
+    dpi = 300
+  )
+}
 
 # ============================================================
 # ANNOTATION COMPARISON
 # ============================================================
 
-p1 <- DimPlot(
-  object,
-  reduction = "umap.integrated",
-  group.by = "SingleR_label",
-  label = TRUE,
-  repel = TRUE
-) +
-  ggtitle("SingleR")
+if (
+  all(
+    c(
+      "SingleR_label",
+      "scPred_label",
+      "annotation_consensus"
+    ) %in%
+      colnames(object@meta.data)
+  ) &&
+  "umap.integrated" %in% Reductions(object)
+) {
 
-p2 <- DimPlot(
-  object,
-  reduction = "umap.integrated",
-  group.by = "scPred_label",
-  label = TRUE,
-  repel = TRUE
-) +
-  ggtitle("scPred")
+  p1 <- DimPlot(
+    object,
+    reduction = "umap.integrated",
+    group.by = "SingleR_label",
+    label = TRUE,
+    repel = TRUE,
+    na.value = "grey80"
+  ) +
+    ggtitle("SingleR")
 
-p3 <- DimPlot(
-  object,
-  reduction = "umap.integrated",
-  group.by = "annotation_consensus",
-  label = TRUE,
-  repel = TRUE
-) +
-  ggtitle("SingleR + scPred consensus")
+  p2 <- DimPlot(
+    object,
+    reduction = "umap.integrated",
+    group.by = "scPred_label",
+    label = TRUE,
+    repel = TRUE,
+    na.value = "grey80"
+  ) +
+    ggtitle("scPred")
 
-annotation_panel <- (
-  p1 | p2
-) / p3
+  p3 <- DimPlot(
+    object,
+    reduction = "umap.integrated",
+    group.by = "annotation_consensus",
+    label = TRUE,
+    repel = TRUE,
+    na.value = "grey80"
+  ) +
+    ggtitle(
+      "SingleR + scPred consensus"
+    )
 
-ggsave(
-  file.path(
-    project_dir,
-    "figures",
-    "annotation",
-    "FINAL_annotation_comparison.png"
-  ),
-  annotation_panel,
-  width = 14,
-  height = 11,
-  dpi = 300
-)
+  annotation_panel <- (
+    p1 | p2
+  ) / p3
+
+  ggsave(
+    file.path(
+      project_dir,
+      "figures",
+      "annotation",
+      "FINAL_annotation_comparison.png"
+    ),
+    annotation_panel,
+    width = 14,
+    height = 11,
+    dpi = 300
+  )
+}
 
 # ============================================================
 # QC
 # ============================================================
 
-p_qc <- VlnPlot(
-  object,
-  features = c(
-    "nFeature_RNA",
-    "nCount_RNA",
-    "percent.mt"
-  ),
-  group.by = "sample",
-  ncol = 3,
-  pt.size = 0.03
-)
+if (
+  all(
+    c(
+      "nFeature_RNA",
+      "nCount_RNA",
+      "percent.mt",
+      "sample"
+    ) %in%
+      colnames(object@meta.data)
+  )
+) {
 
-ggsave(
-  file.path(
-    project_dir,
-    "figures",
-    "qc",
-    "FINAL_QC.png"
-  ),
-  p_qc,
-  width = 15,
-  height = 6,
-  dpi = 300
-)
+  p_qc <- VlnPlot(
+    object,
+    features = c(
+      "nFeature_RNA",
+      "nCount_RNA",
+      "percent.mt"
+    ),
+    group.by = "sample",
+    ncol = 3,
+    pt.size = 0.03
+  )
+
+  ggsave(
+    file.path(
+      project_dir,
+      "figures",
+      "qc",
+      "FINAL_QC.png"
+    ),
+    p_qc,
+    width = 15,
+    height = 6,
+    dpi = 300
+  )
+}
 
 # ============================================================
-# CONSENSUS COUNTS
+# CONSENSUS CELL COUNTS
 # ============================================================
 
 if (
@@ -159,7 +212,9 @@ if (
 ) {
 
   counts <- as.data.frame(
-    table(object$annotation_consensus)
+    table(
+      object$annotation_consensus
+    )
   )
 
   colnames(counts) <- c(
@@ -200,8 +255,10 @@ if (
 # SESSION INFO
 # ============================================================
 
-save_session_info(project_dir)
-
-message(
-  "Final figures generated successfully."
+save_session_info(
+  project_dir
 )
+
+message("============================================================")
+message("Final figures generated successfully")
+message("============================================================")
