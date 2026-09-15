@@ -27,7 +27,7 @@ extract_dir <- file.path(
 objects <- list()
 
 # ============================================================
-# IMPORT EACH SAMPLE SEPARATELY
+# IMPORT EACH SAMPLE
 # ============================================================
 
 for (i in seq_len(nrow(metadata))) {
@@ -61,28 +61,19 @@ for (i in seq_len(nrow(metadata))) {
     min.features = 0
   )
 
-  # ----------------------------------------------------------
-  # Make cell IDs unique before merging
-  # ----------------------------------------------------------
-
+  # Make cell names unique before merging
   obj <- RenameCells(
     obj,
     add.cell.id = sample_name
   )
 
-  # ----------------------------------------------------------
   # Metadata
-  # ----------------------------------------------------------
-
   obj$gsm <- gsm
   obj$sample <- sample_name
   obj$treatment <- metadata$treatment[i]
   obj$replicate <- metadata$replicate[i]
 
-  # ----------------------------------------------------------
   # Mitochondrial percentage
-  # ----------------------------------------------------------
-
   obj[["percent.mt"]] <- PercentageFeatureSet(
     obj,
     pattern = "^MT-"
@@ -92,7 +83,7 @@ for (i in seq_len(nrow(metadata))) {
 }
 
 # ============================================================
-# MERGE ALL SAMPLES
+# MERGE
 # ============================================================
 
 message("============================================================")
@@ -106,52 +97,54 @@ combined <- merge(
   project = "GSE145410"
 )
 
+rm(objects)
+gc()
+
 # ============================================================
-# IMPORTANT SEURAT v5 LAYER CLEANUP
-# ============================================================
-#
-# merge() can create several counts.* layers.
-# We immediately collapse them into a single RNA counts layer.
-#
-# This is intentional:
-#
-# 02 -> ONE clean RNA layer
-# 03 -> normalization, no split
-# 05 -> ONE split operation before integration
-#
-# This prevents repeated:
-# .SeuratProject.SeuratProject.SeuratProject...
-# layer names.
+# CLEAN SEURAT v5 LAYERS
 # ============================================================
 
 message("============================================================")
-message("RNA layers immediately after merge")
-message("============================================================")
-
-rna_layers <- Layers(combined[["RNA"]])
-
-print(rna_layers)
-
-if (length(rna_layers) > 1) {
-
-  message("Multiple RNA layers detected after merge.")
-  message("Joining RNA layers into a single clean assay...")
-
-  combined[["RNA"]] <- JoinLayers(
-    combined[["RNA"]]
-  )
-}
-
-message("============================================================")
-message("RNA layers after cleanup")
+message("RNA layers after merge")
 message("============================================================")
 
 print(
   Layers(combined[["RNA"]])
 )
 
+# Merge may create multiple count layers.
+# Collapse them immediately.
+if (length(Layers(combined[["RNA"]])) > 1) {
+
+  message("Joining RNA layers...")
+
+  combined[["RNA"]] <- JoinLayers(
+    combined[["RNA"]]
+  )
+
+  gc()
+}
+
+message("============================================================")
+message("RNA layers after JoinLayers")
+message("============================================================")
+
+print(
+  Layers(combined[["RNA"]])
+)
+
+# Hard validation
+layer_names <- Layers(combined[["RNA"]])
+
+if (any(grepl("SeuratProject", layer_names))) {
+  stop(
+    "Invalid RNA layers detected after JoinLayers:\n",
+    paste(layer_names, collapse = "\n")
+  )
+}
+
 # ============================================================
-# CHECK SAMPLE METADATA
+# SAMPLE METADATA
 # ============================================================
 
 combined$sample <- factor(
@@ -215,10 +208,6 @@ ggsave(
 # ============================================================
 # ADAPTIVE QC WITH isOutlier()
 # ============================================================
-#
-# Thresholds are calculated independently for each sample.
-# This preserves the actual adaptive QC strategy.
-# ============================================================
 
 message("============================================================")
 message("Calculating adaptive QC thresholds")
@@ -258,13 +247,10 @@ combined$discard <- (
 )
 
 # ============================================================
-# QC THRESHOLD TABLE
+# QC THRESHOLDS
 # ============================================================
 
-get_thresholds <- function(
-  x,
-  metric_name
-) {
+get_thresholds <- function(x, metric_name) {
 
   thresholds <- attr(
     x,
@@ -305,12 +291,8 @@ write.csv(
 )
 
 # ============================================================
-# FILTER CELLS
+# FILTER
 # ============================================================
-
-message("============================================================")
-message("Filtering low-quality cells")
-message("============================================================")
 
 cells_before <- ncol(combined)
 
@@ -332,7 +314,7 @@ message(
 )
 
 # ============================================================
-# REMOVE TEMPORARY QC FLAGS
+# REMOVE QC FLAGS
 # ============================================================
 
 combined$discard <- NULL
@@ -387,23 +369,22 @@ ggsave(
 )
 
 # ============================================================
-# FINAL RNA LAYER VALIDATION
+# FINAL LAYER CHECK
 # ============================================================
-
-message("============================================================")
-message("Final RNA layer validation")
-message("============================================================")
 
 final_layers <- Layers(
   combined[["RNA"]]
 )
 
+message("============================================================")
+message("Final RNA layers")
+message("============================================================")
+
 print(final_layers)
 
-if (length(final_layers) > 3) {
-  warning(
-    "More than three RNA layers remain after QC: ",
-    paste(final_layers, collapse = ", ")
+if (any(grepl("SeuratProject", final_layers))) {
+  stop(
+    "Invalid SeuratProject layer names remain."
   )
 }
 
@@ -428,5 +409,4 @@ save_session_info(
 message("============================================================")
 message("QC completed successfully")
 message("Cells retained: ", ncol(combined))
-message("RNA layers: ", paste(final_layers, collapse = ", "))
 message("============================================================")
