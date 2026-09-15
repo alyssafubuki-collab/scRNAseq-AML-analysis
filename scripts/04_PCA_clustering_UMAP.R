@@ -1,9 +1,8 @@
 # ============================================================
 # 04_PCA_clustering_UMAP.R
-# Unintegrated PCA, neighbors, clustering and UMAP
 #
-# This step is intentionally kept as a pre-integration diagnostic.
-# Only the 2,000 HVGs are scaled.
+# Unintegrated PCA / clustering / UMAP
+# Used as a pre-integration reference.
 # ============================================================
 
 source("R/functions.R")
@@ -13,43 +12,50 @@ library(ggplot2)
 
 project_dir <- get_project_dir()
 
-object <- readRDS(
-  file.path(
-    project_dir,
-    "results",
-    "objects",
-    "03_normalized.rds"
-  )
+input <- file.path(
+  project_dir,
+  "results",
+  "objects",
+  "03_normalized.rds"
 )
+
+if (!file.exists(input)) {
+  stop("Input object not found: ", input)
+}
+
+object <- readRDS(input)
+
+if (!inherits(object, "Seurat")) {
+  stop("Input is not a Seurat object.")
+}
 
 DefaultAssay(object) <- "RNA"
 
-if (length(VariableFeatures(object)) == 0) {
-  stop("No variable features found.")
+hvg <- VariableFeatures(object)
+
+if (length(hvg) < 20) {
+  stop("Too few variable features for PCA.")
 }
 
-# ============================================================
-# SCALE ONLY HVGs
-# ============================================================
-
-message("Scaling 2,000 HVGs for pre-integration PCA...")
-
-object <- ScaleData(
-  object,
-  features = VariableFeatures(object),
-  verbose = FALSE
+dims_use <- 1:min(
+  30,
+  length(hvg) - 1
 )
 
-# ============================================================
-# PCA
-# ============================================================
+message("============================================================")
+message("Running unintegrated PCA")
+message("============================================================")
 
 object <- RunPCA(
   object,
-  features = VariableFeatures(object),
-  npcs = 20,
+  features = hvg,
+  npcs = 30,
   verbose = FALSE
 )
+
+# ============================================================
+# ELBOW PLOT
+# ============================================================
 
 pdf(
   file.path(
@@ -65,21 +71,25 @@ pdf(
 print(
   ElbowPlot(
     object,
-    ndims = 20
+    ndims = 30
   )
 )
 
 dev.off()
 
 # ============================================================
-# NEIGHBORS + CLUSTERS
+# NEIGHBORS
 # ============================================================
 
 object <- FindNeighbors(
   object,
-  dims = 1:20,
+  dims = dims_use,
   verbose = FALSE
 )
+
+# ============================================================
+# CLUSTERS
+# ============================================================
 
 object <- FindClusters(
   object,
@@ -93,14 +103,15 @@ object <- FindClusters(
 
 object <- RunUMAP(
   object,
-  dims = 1:20,
+  dims = dims_use,
+  reduction = "pca",
   reduction.name = "umap.unintegrated",
   reduction.key = "unintegratedUMAP_",
   verbose = FALSE
 )
 
 # ============================================================
-# PLOTS
+# FIGURES
 # ============================================================
 
 p1 <- DimPlot(
@@ -147,14 +158,19 @@ ggsave(
 # SAVE
 # ============================================================
 
-saveRDS(
-  object,
-  file.path(
-    project_dir,
-    "results",
-    "objects",
-    "04_unintegrated.rds"
-  )
+output <- file.path(
+  project_dir,
+  "results",
+  "objects",
+  "04_unintegrated.rds"
 )
 
-message("PCA, clustering and unintegrated UMAP completed.")
+saveRDS(
+  object,
+  output
+)
+
+message("============================================================")
+message("Unintegrated PCA / clustering / UMAP completed")
+message("Output: ", output)
+message("============================================================")
