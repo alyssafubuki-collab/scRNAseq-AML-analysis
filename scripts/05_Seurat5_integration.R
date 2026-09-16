@@ -3,13 +3,20 @@
 #
 # Seurat v5 CCA integration
 #
-# Workflow:
-# split -> NormalizeData -> FindVariableFeatures ->
-# ScaleData -> RunPCA -> IntegrateLayers(CCAIntegration)
+# Workflow based directly on the previous working workflow:
+#
+# QC object
+#   -> split RNA layers by sample
+#   -> NormalizeData
+#   -> FindVariableFeatures
+#   -> ScaleData
+#   -> RunPCA
+#   -> IntegrateLayers / CCAIntegration
+#   -> integrated UMAP
+#   -> integrated clustering
 #
 # No SelectIntegrationFeatures()
 # No scAnnoX
-# No reference integration in this version
 # ============================================================
 
 source("R/functions.R")
@@ -40,7 +47,7 @@ input_file <- file.path(
   project_dir,
   "results",
   "objects",
-  "03_normalized.rds"
+  "02_QC_filtered.rds"
 )
 
 output_file <- file.path(
@@ -76,29 +83,65 @@ if (!file.exists(input_file)) {
 }
 
 # ------------------------------------------------------------
-# LOAD
+# LOAD QC OBJECT
 # ------------------------------------------------------------
 
 cat("\n")
 cat("============================================================\n")
-cat("LOADING NORMALIZED OBJECT\n")
+cat("LOADING QC OBJECT\n")
 cat("============================================================\n\n")
 
 object <- readRDS(input_file)
 
 DefaultAssay(object) <- "RNA"
 
-cat("Cells: ", ncol(object), "\n", sep = "")
-cat("Features: ", nrow(object), "\n", sep = "")
+cat(
+  "Cells: ",
+  ncol(object),
+  "\n",
+  sep = ""
+)
+
+cat(
+  "Features: ",
+  nrow(object),
+  "\n",
+  sep = ""
+)
 
 if (!"sample" %in% colnames(object[[]])) {
   stop(
-    "Metadata column 'sample' is missing."
+    "Metadata column 'sample' is missing from the Seurat object."
   )
 }
 
 cat("\nSamples:\n")
 print(table(object$sample))
+
+# ------------------------------------------------------------
+# CHECK INITIAL RNA LAYERS
+# ------------------------------------------------------------
+
+cat("\n")
+cat("============================================================\n")
+cat("INITIAL RNA LAYERS\n")
+cat("============================================================\n\n")
+
+initial_layers <- Layers(object[["RNA"]])
+
+print(initial_layers)
+
+# The object coming from script 02 should be unsplit.
+# If it is already split, stop instead of silently modifying it.
+
+if (any(grepl("^counts\\.", initial_layers))) {
+  stop(
+    paste0(
+      "The input QC object is already split into sample-specific ",
+      "layers. Expected an unsplit RNA assay before script 05."
+    )
+  )
+}
 
 # ------------------------------------------------------------
 # SPLIT
@@ -109,29 +152,53 @@ cat("============================================================\n")
 cat("SPLITTING RNA LAYERS BY SAMPLE\n")
 cat("============================================================\n\n")
 
-rna_layers <- Layers(object[["RNA"]])
-
-cat("RNA layers before split:\n")
-print(rna_layers)
-
-already_split <- any(
-  grepl("^counts\\.", rna_layers)
+object[["RNA"]] <- split(
+  object[["RNA"]],
+  f = object$sample
 )
 
-if (!already_split) {
+split_layers <- Layers(object[["RNA"]])
 
-  object[["RNA"]] <- split(
-    object[["RNA"]],
-    f = object$sample
+cat("RNA layers after split:\n")
+print(split_layers)
+
+# ------------------------------------------------------------
+# CHECK SPLIT STRUCTURE
+# ------------------------------------------------------------
+
+count_layers <- Layers(
+  object[["RNA"]],
+  search = "^counts\\."
+)
+
+data_layers <- Layers(
+  object[["RNA"]],
+  search = "^data\\."
+)
+
+cat("\nNumber of counts layers: ")
+cat(length(count_layers))
+cat("\n")
+
+cat("Number of data layers: ")
+cat(length(data_layers))
+cat("\n")
+
+if (length(count_layers) != 8) {
+  stop(
+    "Expected 8 sample-specific counts layers, found ",
+    length(count_layers),
+    "."
   )
-
-} else {
-
-  cat("RNA assay already split. Skipping split().\n")
 }
 
-cat("\nRNA layers after split:\n")
-print(Layers(object[["RNA"]]))
+if (length(data_layers) != 8) {
+  stop(
+    "Expected 8 sample-specific data layers, found ",
+    length(data_layers),
+    "."
+  )
+}
 
 # ------------------------------------------------------------
 # NORMALIZATION
@@ -148,6 +215,8 @@ object <- NormalizeData(
   scale.factor = 10000,
   verbose = FALSE
 )
+
+cat("Normalization completed.\n")
 
 # ------------------------------------------------------------
 # VARIABLE FEATURES
@@ -174,10 +243,11 @@ cat(
   sep = ""
 )
 
-if (length(hvg) < 1000) {
-  stop(
-    "Too few variable features were selected: ",
-    length(hvg)
+if (length(hvg) != 2000) {
+  warning(
+    "Expected 2000 variable features but found ",
+    length(hvg),
+    "."
   )
 }
 
@@ -195,6 +265,8 @@ object <- ScaleData(
   features = hvg,
   verbose = FALSE
 )
+
+cat("Scaling completed.\n")
 
 # ------------------------------------------------------------
 # PCA
@@ -215,6 +287,77 @@ object <- RunPCA(
 cat("PCA completed.\n")
 
 # ------------------------------------------------------------
+# CCA PRE-FLIGHT DIAGNOSTICS
+# ------------------------------------------------------------
+
+cat("\n")
+cat("============================================================\n")
+cat("CCA PRE-FLIGHT DIAGNOSTICS\n")
+cat("============================================================\n\n")
+
+cat("RNA layers:\n")
+print(Layers(object[["RNA"]]))
+
+cat("\nPCA dimensions:\n")
+print(dim(Embeddings(object[["pca"]])))
+
+cat("\nNumber of PCA cells:\n")
+cat(nrow(Embeddings(object[["pca"]])))
+cat("\n")
+
+cat("\nNumber of object cells:\n")
+cat(ncol(object))
+cat("\n")
+
+# Check that PCA contains exactly the cells of the Seurat object.
+
+pca_cells <- rownames(
+  Embeddings(object[["pca"]])
+)
+
+object_cells <- colnames(object)
+
+if (!setequal(pca_cells, object_cells)) {
+  stop(
+    "PCA cell names do not match Seurat object cell names."
+  )
+}
+
+cat("\nPCA cell identity check: OK\n")
+
+# Check that each sample has cells.
+
+sample_counts <- table(object$sample)
+
+cat("\nCells per sample:\n")
+print(sample_counts)
+
+if (any(sample_counts == 0)) {
+  stop(
+    "At least one sample contains zero cells."
+  )
+}
+
+# Check sample-specific layer names.
+
+sample_order <- sub(
+  "^counts\\.",
+  "",
+  count_layers
+)
+
+cat("\nSample order in RNA layers:\n")
+print(sample_order)
+
+if (!setequal(sample_order, unique(object$sample))) {
+  stop(
+    "RNA layer sample names do not match object$sample."
+  )
+}
+
+cat("\nSample/layer identity check: OK\n")
+
+# ------------------------------------------------------------
 # CCA INTEGRATION
 # ------------------------------------------------------------
 
@@ -223,8 +366,21 @@ cat("============================================================\n")
 cat("CCA INTEGRATION\n")
 cat("============================================================\n\n")
 
-cat("Running CCA integration across all samples.\n")
-cat("Reference integration is disabled for this test.\n\n")
+cat(
+  "Running CCAIntegration across all 8 samples.\n"
+)
+
+cat(
+  "No reference sample is specified in this run.\n"
+)
+
+cat(
+  "Using dimensions 1:30.\n"
+)
+
+cat(
+  "Using k.weight = 50.\n\n"
+)
 
 object <- IntegrateLayers(
   object = object,
@@ -237,7 +393,44 @@ object <- IntegrateLayers(
   verbose = FALSE
 )
 
-cat("\nCCA integration completed successfully.\n")
+cat("\n")
+cat("CCA integration completed successfully.\n")
+
+# ------------------------------------------------------------
+# CHECK INTEGRATED REDUCTION
+# ------------------------------------------------------------
+
+cat("\n")
+cat("============================================================\n")
+cat("CHECKING INTEGRATED REDUCTION\n")
+cat("============================================================\n\n")
+
+if (!"integrated.cca" %in% Reductions(object)) {
+  stop(
+    "integrated.cca reduction was not created."
+  )
+}
+
+integrated_embeddings <- Embeddings(
+  object[["integrated.cca"]]
+)
+
+cat(
+  "Integrated reduction dimensions: ",
+  nrow(integrated_embeddings),
+  " cells x ",
+  ncol(integrated_embeddings),
+  " dimensions\n",
+  sep = ""
+)
+
+if (nrow(integrated_embeddings) != ncol(object)) {
+  stop(
+    "Number of cells in integrated.cca does not match Seurat object."
+  )
+}
+
+cat("Integrated reduction check: OK\n")
 
 # ------------------------------------------------------------
 # INTEGRATED NEIGHBORS
@@ -245,7 +438,7 @@ cat("\nCCA integration completed successfully.\n")
 
 cat("\n")
 cat("============================================================\n")
-cat("INTEGRATED NEIGHBORS / CLUSTERS\n")
+cat("INTEGRATED NEIGHBORS\n")
 cat("============================================================\n\n")
 
 object <- FindNeighbors(
@@ -255,6 +448,15 @@ object <- FindNeighbors(
   verbose = FALSE
 )
 
+# ------------------------------------------------------------
+# INTEGRATED CLUSTERS
+# ------------------------------------------------------------
+
+cat("\n")
+cat("============================================================\n")
+cat("INTEGRATED CLUSTERS\n")
+cat("============================================================\n\n")
+
 object <- FindClusters(
   object,
   resolution = 0.4,
@@ -262,7 +464,12 @@ object <- FindClusters(
   verbose = FALSE
 )
 
-cat("Integrated clustering completed.\n")
+cat(
+  "Number of CCA clusters: ",
+  length(unique(object$cluster.cca)),
+  "\n",
+  sep = ""
+)
 
 # ------------------------------------------------------------
 # INTEGRATED UMAP
