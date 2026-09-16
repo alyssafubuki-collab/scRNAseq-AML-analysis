@@ -35,11 +35,35 @@ cat("============================================================\n\n")
 # 1. Paths
 # ============================================================
 
-input_file <- "results/03_normalized.rds"
-output_file <- "results/05_integrated.rds"
+project_dir <- getwd()
 
-umap_file <- "results/05_integration_umap.png"
-elbow_file <- "results/05_integration_elbow.png"
+input_file <- file.path(
+  project_dir,
+  "results",
+  "objects",
+  "03_normalized.rds"
+)
+
+output_file <- file.path(
+  project_dir,
+  "results",
+  "objects",
+  "05_integrated.rds"
+)
+
+umap_file <- file.path(
+  project_dir,
+  "figures",
+  "integration",
+  "05_integration_umap.png"
+)
+
+elbow_file <- file.path(
+  project_dir,
+  "figures",
+  "integration",
+  "05_integration_elbow.png"
+)
 
 if (!file.exists(input_file)) {
   stop(
