@@ -3,12 +3,13 @@
 #
 # Seurat v5 CCA integration
 #
-# Based on the previous working integration workflow:
+# Workflow:
 # split -> NormalizeData -> FindVariableFeatures ->
 # ScaleData -> RunPCA -> IntegrateLayers(CCAIntegration)
 #
 # No SelectIntegrationFeatures()
 # No scAnnoX
+# No reference integration in this version
 # ============================================================
 
 source("R/functions.R")
@@ -19,16 +20,19 @@ library(ggplot2)
 
 set.seed(123)
 
-# Avoid parallel workers consuming too much RAM on GitHub Actions
+# ------------------------------------------------------------
+# MEMORY / PARALLELIZATION
+# ------------------------------------------------------------
+
 if (requireNamespace("future", quietly = TRUE)) {
   future::plan("sequential")
 }
 
 options(future.globals.maxSize = 4 * 1024^3)
 
-# ============================================================
+# ------------------------------------------------------------
 # PATHS
-# ============================================================
+# ------------------------------------------------------------
 
 project_dir <- get_project_dir()
 
@@ -71,11 +75,12 @@ if (!file.exists(input_file)) {
   )
 }
 
-# ============================================================
-# LOAD OBJECT
-# ============================================================
+# ------------------------------------------------------------
+# LOAD
+# ------------------------------------------------------------
 
-cat("\n============================================================\n")
+cat("\n")
+cat("============================================================\n")
 cat("LOADING NORMALIZED OBJECT\n")
 cat("============================================================\n\n")
 
@@ -83,42 +88,34 @@ object <- readRDS(input_file)
 
 DefaultAssay(object) <- "RNA"
 
-cat("Cells:", ncol(object), "\n")
-cat("Features:", nrow(object), "\n")
+cat("Cells: ", ncol(object), "\n", sep = "")
+cat("Features: ", nrow(object), "\n", sep = "")
 
 if (!"sample" %in% colnames(object[[]])) {
   stop(
-    "Metadata column 'sample' is missing from the Seurat object."
+    "Metadata column 'sample' is missing."
   )
 }
 
 cat("\nSamples:\n")
 print(table(object$sample))
 
-# ============================================================
-# SPLIT RNA LAYERS
-# ============================================================
+# ------------------------------------------------------------
+# SPLIT
+# ------------------------------------------------------------
 
-cat("\n============================================================\n")
+cat("\n")
+cat("============================================================\n")
 cat("SPLITTING RNA LAYERS BY SAMPLE\n")
 cat("============================================================\n\n")
 
-rna_layers_before <- Layers(object[["RNA"]])
+rna_layers <- Layers(object[["RNA"]])
 
 cat("RNA layers before split:\n")
-print(rna_layers_before)
-
-# Only split if the assay is currently not sample-split.
-#
-# A normal unsplit Seurat v5 assay has layers such as:
-# counts / data
-#
-# A split assay has:
-# counts.SampleA / counts.SampleB / ...
-# data.SampleA / data.SampleB / ...
+print(rna_layers)
 
 already_split <- any(
-  grepl("^counts\\.", rna_layers_before)
+  grepl("^counts\\.", rna_layers)
 )
 
 if (!already_split) {
@@ -128,23 +125,20 @@ if (!already_split) {
     f = object$sample
   )
 
-  cat("\nRNA layers after split:\n")
-  print(Layers(object[["RNA"]]))
-
 } else {
 
-  cat(
-    "\nRNA assay is already split by sample. ",
-    "Skipping split().\n",
-    sep = ""
-  )
+  cat("RNA assay already split. Skipping split().\n")
 }
 
-# ============================================================
-# NORMALIZATION
-# ============================================================
+cat("\nRNA layers after split:\n")
+print(Layers(object[["RNA"]]))
 
-cat("\n============================================================\n")
+# ------------------------------------------------------------
+# NORMALIZATION
+# ------------------------------------------------------------
+
+cat("\n")
+cat("============================================================\n")
 cat("NORMALIZATION\n")
 cat("============================================================\n\n")
 
@@ -155,11 +149,12 @@ object <- NormalizeData(
   verbose = FALSE
 )
 
-# ============================================================
+# ------------------------------------------------------------
 # VARIABLE FEATURES
-# ============================================================
+# ------------------------------------------------------------
 
-cat("\n============================================================\n")
+cat("\n")
+cat("============================================================\n")
 cat("HIGHLY VARIABLE FEATURES\n")
 cat("============================================================\n\n")
 
@@ -173,16 +168,25 @@ object <- FindVariableFeatures(
 hvg <- VariableFeatures(object)
 
 cat(
-  "Number of variable features:",
+  "Number of variable features: ",
   length(hvg),
-  "\n"
+  "\n",
+  sep = ""
 )
 
-# ============================================================
-# SCALE DATA
-# ============================================================
+if (length(hvg) < 1000) {
+  stop(
+    "Too few variable features were selected: ",
+    length(hvg)
+  )
+}
 
-cat("\n============================================================\n")
+# ------------------------------------------------------------
+# SCALE
+# ------------------------------------------------------------
+
+cat("\n")
+cat("============================================================\n")
 cat("SCALING\n")
 cat("============================================================\n\n")
 
@@ -192,11 +196,12 @@ object <- ScaleData(
   verbose = FALSE
 )
 
-# ============================================================
+# ------------------------------------------------------------
 # PCA
-# ============================================================
+# ------------------------------------------------------------
 
-cat("\n============================================================\n")
+cat("\n")
+cat("============================================================\n")
 cat("PCA\n")
 cat("============================================================\n\n")
 
@@ -209,80 +214,23 @@ object <- RunPCA(
 
 cat("PCA completed.\n")
 
-# ============================================================
-# DEFINE REFERENCE SAMPLES
-# ============================================================
-
-cat("\n============================================================\n")
-cat("CCA REFERENCE SAMPLES\n")
-cat("============================================================\n\n")
-
-# The public GSE145410 dataset does not contain the
-# pre/post-treatment timepoint structure used in the
-# original CRCM workflow.
-#
-# Here DMSO_A and DMSO_B are used as the reference samples,
-# corresponding to the control condition.
-
-reference_samples <- c(
-  "DMSO_A",
-  "DMSO_B"
-)
-
-# Get the order of the sample-specific counts layers.
-count_layers <- Layers(
-  object[["RNA"]],
-  search = "^counts\\."
-)
-
-if (length(count_layers) == 0) {
-  stop(
-    "No sample-specific counts layers were found after splitting."
-  )
-}
-
-sample_order <- sub(
-  "^counts\\.",
-  "",
-  count_layers
-)
-
-cat("Sample order used by Seurat:\n")
-print(sample_order)
-
-reference_indices <- which(
-  sample_order %in% reference_samples
-)
-
-cat("\nReference samples:\n")
-print(reference_samples)
-
-cat("\nReference indices:\n")
-print(reference_indices)
-
-if (length(reference_indices) != length(reference_samples)) {
-  stop(
-    "Could not identify all reference samples. Expected: ",
-    paste(reference_samples, collapse = ", "),
-    ". Found in layers: ",
-    paste(sample_order, collapse = ", ")
-  )
-}
-
-# ============================================================
+# ------------------------------------------------------------
 # CCA INTEGRATION
-# ============================================================
+# ------------------------------------------------------------
 
-cat("\n============================================================\n")
+cat("\n")
+cat("============================================================\n")
 cat("CCA INTEGRATION\n")
 cat("============================================================\n\n")
+
+cat("Running CCA integration across all samples.\n")
+cat("Reference integration is disabled for this test.\n\n")
 
 object <- IntegrateLayers(
   object = object,
   method = CCAIntegration,
   orig.reduction = "pca",
   new.reduction = "integrated.cca",
-  reference = reference_indices,
   dims = 1:30,
   dims.to.integrate = 30,
   k.weight = 50,
@@ -291,11 +239,13 @@ object <- IntegrateLayers(
 
 cat("\nCCA integration completed successfully.\n")
 
-# ============================================================
-# INTEGRATED NEIGHBORS / CLUSTERS\n# ============================================================
+# ------------------------------------------------------------
+# INTEGRATED NEIGHBORS
+# ------------------------------------------------------------
 
-cat("\n============================================================\n")
-cat("INTEGRATED CLUSTERING\n")
+cat("\n")
+cat("============================================================\n")
+cat("INTEGRATED NEIGHBORS / CLUSTERS\n")
 cat("============================================================\n\n")
 
 object <- FindNeighbors(
@@ -314,11 +264,12 @@ object <- FindClusters(
 
 cat("Integrated clustering completed.\n")
 
-# ============================================================
+# ------------------------------------------------------------
 # INTEGRATED UMAP
-# ============================================================
+# ------------------------------------------------------------
 
-cat("\n============================================================\n")
+cat("\n")
+cat("============================================================\n")
 cat("INTEGRATED UMAP\n")
 cat("============================================================\n\n")
 
@@ -332,7 +283,7 @@ object <- RunUMAP(
   verbose = FALSE
 )
 
-p_integrated <- DimPlot(
+p_integrated_sample <- DimPlot(
   object,
   reduction = "umap.integrated",
   group.by = "sample"
@@ -344,13 +295,13 @@ ggsave(
     fig_dir,
     "05_UMAP_integrated_sample.png"
   ),
-  plot = p_integrated,
+  plot = p_integrated_sample,
   width = 10,
   height = 7,
   dpi = 300
 )
 
-p_cluster <- DimPlot(
+p_integrated_cluster <- DimPlot(
   object,
   reduction = "umap.integrated",
   group.by = "cluster.cca",
@@ -363,17 +314,18 @@ ggsave(
     fig_dir,
     "05_UMAP_integrated_clusters.png"
   ),
-  plot = p_cluster,
+  plot = p_integrated_cluster,
   width = 10,
   height = 7,
   dpi = 300
 )
 
-# ============================================================
+# ------------------------------------------------------------
 # UNINTEGRATED UMAP
-# ============================================================
+# ------------------------------------------------------------
 
-cat("\n============================================================\n")
+cat("\n")
+cat("============================================================\n")
 cat("UNINTEGRATED UMAP\n")
 cat("============================================================\n\n")
 
@@ -404,11 +356,12 @@ ggsave(
   dpi = 300
 )
 
-# ============================================================
+# ------------------------------------------------------------
 # SAVE
-# ============================================================
+# ------------------------------------------------------------
 
-cat("\n============================================================\n")
+cat("\n")
+cat("============================================================\n")
 cat("SAVING INTEGRATED OBJECT\n")
 cat("============================================================\n\n")
 
@@ -423,6 +376,7 @@ cat(
   "\n"
 )
 
-cat("\n============================================================\n")
+cat("\n")
+cat("============================================================\n")
 cat("SCRIPT 05 COMPLETED SUCCESSFULLY\n")
 cat("============================================================\n")
