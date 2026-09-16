@@ -166,22 +166,21 @@ print(split_layers)
 # CHECK SPLIT STRUCTURE
 # ------------------------------------------------------------
 
+cat("\n")
+cat("============================================================\n")
+cat("CHECKING SPLIT STRUCTURE\n")
+cat("============================================================\n\n")
+
 count_layers <- Layers(
   object[["RNA"]],
   search = "^counts\\."
 )
 
-data_layers <- Layers(
-  object[["RNA"]],
-  search = "^data\\."
-)
+cat("RNA layers after split:\n")
+print(Layers(object[["RNA"]]))
 
 cat("\nNumber of counts layers: ")
 cat(length(count_layers))
-cat("\n")
-
-cat("Number of data layers: ")
-cat(length(data_layers))
 cat("\n")
 
 if (length(count_layers) != 8) {
@@ -192,13 +191,7 @@ if (length(count_layers) != 8) {
   )
 }
 
-if (length(data_layers) != 8) {
-  stop(
-    "Expected 8 sample-specific data layers, found ",
-    length(data_layers),
-    "."
-  )
-}
+cat("\nSplit structure check: OK\n")
 
 # ------------------------------------------------------------
 # NORMALIZATION
@@ -217,6 +210,31 @@ object <- NormalizeData(
 )
 
 cat("Normalization completed.\n")
+
+# ------------------------------------------------------------
+# CHECK NORMALIZED DATA LAYERS
+# ------------------------------------------------------------
+
+data_layers <- Layers(
+  object[["RNA"]],
+  search = "^data\\."
+)
+
+cat("\nNumber of data layers after normalization: ")
+cat(length(data_layers))
+cat("\n")
+
+print(data_layers)
+
+if (length(data_layers) != 8) {
+  stop(
+    "Expected 8 sample-specific data layers after normalization, found ",
+    length(data_layers),
+    "."
+  )
+}
+
+cat("\nNormalized data layer check: OK\n")
 
 # ------------------------------------------------------------
 # VARIABLE FEATURES
