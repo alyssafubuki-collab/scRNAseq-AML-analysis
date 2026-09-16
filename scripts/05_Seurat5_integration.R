@@ -17,6 +17,17 @@
 #
 # No SelectIntegrationFeatures()
 # No scAnnoX
+#
+# ------------------------------------------------------------
+# FIX (see chat discussion): CCAIntegration across all 8 samples
+# with no reference builds a full pairwise merge tree. With
+# strongly divergent conditions (DMSO vs AZA vs INCB059872 vs
+# combo), one branch of that tree can end up with fewer mutual
+# nearest-neighbor anchors than k.weight, which throws:
+#   Error in data.use1[anchors1, ] : subscript out of bounds
+# Fix: explicitly set `reference` to the two DMSO replicates so
+# integration is a star (every sample anchored to DMSO) instead
+# of a fragile all-pairs tree.
 # ============================================================
 
 source("R/functions.R")
@@ -375,6 +386,25 @@ if (!setequal(sample_order, unique(object$sample))) {
 
 cat("\nSample/layer identity check: OK\n")
 
+# Check for duplicate cell barcodes across samples. 10X barcodes can
+# repeat across GEM wells; if any upstream step merged objects without
+# enforcing unique cell names, integration indexing can break silently.
+
+n_dup_cells <- sum(duplicated(colnames(object)))
+
+cat("\nDuplicate cell barcode check: ")
+cat(n_dup_cells)
+cat(" duplicates found\n")
+
+if (n_dup_cells > 0) {
+  stop(
+    "Found ",
+    n_dup_cells,
+    " duplicate cell barcodes across samples. ",
+    "Cell names must be unique before integration."
+  )
+}
+
 # ------------------------------------------------------------
 # CCA INTEGRATION
 # ------------------------------------------------------------
@@ -384,12 +414,44 @@ cat("============================================================\n")
 cat("CCA INTEGRATION\n")
 cat("============================================================\n\n")
 
+# Reference-based integration: anchor every sample to the two DMSO
+# (vehicle) replicates instead of letting Seurat build a full pairwise
+# merge tree across all 8 samples. With strongly divergent conditions
+# (DMSO vs AZA vs INCB059872 vs combo), some branch of that automatic
+# tree can end up with fewer mutual-nearest-neighbor anchors than
+# k.weight, which throws:
+#   Error in data.use1[anchors1, ] : subscript out of bounds
+# Using a fixed reference avoids this by making integration a star
+# (every sample -> DMSO) instead of an all-pairs tree.
+
+reference_samples <- c("DMSO_A", "DMSO_B")
+
+reference_idx <- which(sample_order %in% reference_samples)
+
+if (length(reference_idx) != length(reference_samples)) {
+  stop(
+    "Could not find all reference samples (",
+    paste(reference_samples, collapse = ", "),
+    ") in sample_order."
+  )
+}
+
 cat(
   "Running CCAIntegration across all 8 samples.\n"
 )
 
 cat(
-  "No reference sample is specified in this run.\n"
+  "Reference samples: ",
+  paste(sample_order[reference_idx], collapse = ", "),
+  "\n",
+  sep = ""
+)
+
+cat(
+  "Reference layer indices: ",
+  paste(reference_idx, collapse = ", "),
+  "\n",
+  sep = ""
 )
 
 cat(
@@ -407,6 +469,7 @@ object <- IntegrateLayers(
   new.reduction = "integrated.cca",
   dims = 1:30,
   dims.to.integrate = 30,
+  reference = reference_idx,
   k.weight = 50,
   verbose = FALSE
 )
