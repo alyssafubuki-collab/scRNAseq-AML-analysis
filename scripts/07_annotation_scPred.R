@@ -7,6 +7,25 @@
 #   06_SingleR.rds
 #
 # scPredict performs its own Harmony-based alignment.
+#
+# ------------------------------------------------------------
+# NOTE (see chat discussion): scPred's project_query() internally
+# calls GetAssayData(new, "data"), passing "data" as the SECOND
+# POSITIONAL argument. scPred was written against an older
+# Seurat/SeuratObject API where that position was `slot`. In
+# current SeuratObject (v5), the second positional argument is
+# `assay`, not `slot`/`layer`, so "data" gets validated as an
+# assay name instead -- which fails because the object only has
+# an assay named "RNA":
+#   Error: `assay` must be one of "RNA", not "data".
+#
+# Workaround (carried over from a previous analysis): duplicate
+# the RNA assay under the literal name "data" and make it the
+# default assay before calling scPredict(). This makes "data" a
+# valid assay name, so GetAssayData(new, "data") now resolves
+# correctly instead of erroring -- no need to patch scPred's
+# source. The duplicate assay is removed again right after
+# scPredict() finishes so it isn't carried into the saved object.
 # ============================================================
 
 source("R/functions.R")
@@ -140,6 +159,17 @@ object <- NormalizeData(
 )
 
 # ============================================================
+# SCPRED COMPATIBILITY WORKAROUND
+# ============================================================
+# See note at top of file: duplicate the RNA assay under the name
+# "data" and set it as default so scPred's positional
+# GetAssayData(new, "data") call resolves as a valid assay name.
+
+object[["data"]] <- object[["RNA"]]
+
+DefaultAssay(object) <- "data"
+
+# ============================================================
 # SCPRED
 # ============================================================
 
@@ -155,6 +185,17 @@ object <- scPredict(
   recompute_alignment = TRUE,
   seed = 66
 )
+
+# ============================================================
+# REMOVE WORKAROUND ASSAY
+# ============================================================
+# Drop the duplicate "data" assay now that scPredict has run, so it
+# isn't carried into the saved object and doesn't double the object's
+# size on disk. Restore RNA as the default assay for downstream scripts.
+
+object[["data"]] <- NULL
+
+DefaultAssay(object) <- "RNA"
 
 # ============================================================
 # VALIDATE SCPRED OUTPUT
