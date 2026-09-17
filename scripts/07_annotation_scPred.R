@@ -192,10 +192,12 @@ object <- scPredict(
 # Drop the duplicate "data" assay now that scPredict has run, so it
 # isn't carried into the saved object and doesn't double the object's
 # size on disk. Restore RNA as the default assay for downstream scripts.
-
-object[["data"]] <- NULL
+# NOTE: DefaultAssay must be switched away from "data" BEFORE deleting
+# it -- Seurat refuses to delete whichever assay is currently default.
 
 DefaultAssay(object) <- "RNA"
+
+object[["data"]] <- NULL
 
 # ============================================================
 # VALIDATE SCPRED OUTPUT
