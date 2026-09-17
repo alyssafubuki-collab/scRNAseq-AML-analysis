@@ -177,44 +177,94 @@ if (
   colnames(object@meta.data)
 ) {
 
+  # Diagnostic: always show the label distribution, including NAs, so a
+  # skipped analysis below is traceable back to the upstream consensus
+  # annotation step rather than looking like a silent no-op.
+
+  message("Distribution of annotation_consensus (including NA/unassigned):")
+  print(
+    table(
+      object$annotation_consensus,
+      useNA = "ifany"
+    )
+  )
+
   valid_cells <- (
     !is.na(object$annotation_consensus) &
     object$annotation_consensus != "unassigned"
   )
 
-  annotation_object <- subset(
-    object,
-    cells = colnames(object)[valid_cells]
+  n_valid <- sum(valid_cells)
+
+  cat(
+    "\nCells with a valid annotation_consensus label: ",
+    n_valid,
+    " / ",
+    length(valid_cells),
+    "\n",
+    sep = ""
   )
 
-  if (
-    length(
-      unique(
-        annotation_object$annotation_consensus
+  # Guard against subsetting to zero cells. This happens if every cell
+  # is NA or "unassigned" (e.g. the consensus annotation step upstream
+  # did not resolve any confident labels) -- subset() correctly refuses
+  # an empty `cells` vector, so check for it explicitly instead of
+  # letting it crash the whole DE run.
+
+  if (n_valid == 0) {
+
+    warning(
+      "No cells have a valid annotation_consensus label (all NA or ",
+      "\"unassigned\"). Consensus annotation marker analysis skipped. ",
+      "Check the 08_annotation_consensus step."
+    )
+
+  } else {
+
+    annotation_object <- subset(
+      object,
+      cells = colnames(object)[valid_cells]
+    )
+
+    if (
+      length(
+        unique(
+          annotation_object$annotation_consensus
+        )
+      ) >= 2
+    ) {
+
+      Idents(annotation_object) <-
+        "annotation_consensus"
+
+      annotation_markers <- FindAllMarkers(
+        annotation_object,
+        only.pos = TRUE,
+        min.pct = 0.25,
+        logfc.threshold = 0.25
       )
-    ) >= 2
-  ) {
 
-    Idents(annotation_object) <-
-      "annotation_consensus"
+      write.csv(
+        annotation_markers,
+        file.path(
+          project_dir,
+          "results",
+          "differential_expression",
+          "consensus_annotation_markers.csv"
+        ),
+        row.names = FALSE
+      )
 
-    annotation_markers <- FindAllMarkers(
-      annotation_object,
-      only.pos = TRUE,
-      min.pct = 0.25,
-      logfc.threshold = 0.25
-    )
+    } else {
 
-    write.csv(
-      annotation_markers,
-      file.path(
-        project_dir,
-        "results",
-        "differential_expression",
-        "consensus_annotation_markers.csv"
-      ),
-      row.names = FALSE
-    )
+      warning(
+        "Fewer than two distinct annotation_consensus labels among ",
+        "valid cells (",
+        n_valid,
+        " cells). Consensus annotation marker analysis skipped."
+      )
+
+    }
   }
 }
 
