@@ -1,7 +1,7 @@
 # ============================================================
 # 05_Seurat5_integration.R
 #
-# Seurat v5 CCA integration
+# Seurat v5 Harmony integration
 #
 # Workflow based directly on the previous working workflow:
 #
@@ -11,7 +11,7 @@
 #   -> FindVariableFeatures
 #   -> ScaleData
 #   -> RunPCA
-#   -> IntegrateLayers / CCAIntegration
+#   -> IntegrateLayers / HarmonyIntegration
 #   -> integrated UMAP
 #   -> integrated clustering
 #
@@ -19,15 +19,21 @@
 # No scAnnoX
 #
 # ------------------------------------------------------------
-# FIX (see chat discussion): CCAIntegration across all 8 samples
-# with no reference builds a full pairwise merge tree. With
-# strongly divergent conditions (DMSO vs AZA vs INCB059872 vs
-# combo), one branch of that tree can end up with fewer mutual
-# nearest-neighbor anchors than k.weight, which throws:
-#   Error in data.use1[anchors1, ] : subscript out of bounds
-# Fix: explicitly set `reference` to the two DMSO replicates so
-# integration is a star (every sample anchored to DMSO) instead
-# of a fragile all-pairs tree.
+# NOTE (see chat discussion): CCAIntegration reproducibly failed
+# with "Error in data.use1[anchors1, ] : subscript out of bounds"
+# inside Seurat's anchor-weighting step, both with the default
+# all-pairs merge tree and with an explicit DMSO reference. This
+# happens when a sample pair shares fewer mutual-nearest-neighbor
+# anchors than k.weight. Given AZA (demethylating agent) and
+# INCB059872 (LSD1 inhibitor) are both expected to cause large
+# transcriptional shifts relative to DMSO, at least one pair
+# likely lacks enough shared anchors for CCA regardless of
+# k.weight or reference choice.
+#
+# Fix: use HarmonyIntegration instead. Harmony integrates on the
+# PCA embedding directly with no anchor-finding step, so it is
+# not subject to this failure mode and is standard practice for
+# designs with strong expected treatment effects across samples.
 # ============================================================
 
 source("R/functions.R")
@@ -321,7 +327,7 @@ cat("PCA completed.\n")
 
 cat("\n")
 cat("============================================================\n")
-cat("CCA PRE-FLIGHT DIAGNOSTICS\n")
+cat("INTEGRATION PRE-FLIGHT DIAGNOSTICS\n")
 cat("============================================================\n\n")
 
 cat("RNA layers:\n")
@@ -406,76 +412,55 @@ if (n_dup_cells > 0) {
 }
 
 # ------------------------------------------------------------
-# CCA INTEGRATION
+# HARMONY INTEGRATION
 # ------------------------------------------------------------
 
 cat("\n")
 cat("============================================================\n")
-cat("CCA INTEGRATION\n")
+cat("HARMONY INTEGRATION\n")
 cat("============================================================\n\n")
 
-# Reference-based integration: anchor every sample to the two DMSO
-# (vehicle) replicates instead of letting Seurat build a full pairwise
-# merge tree across all 8 samples. With strongly divergent conditions
-# (DMSO vs AZA vs INCB059872 vs combo), some branch of that automatic
-# tree can end up with fewer mutual-nearest-neighbor anchors than
-# k.weight, which throws:
-#   Error in data.use1[anchors1, ] : subscript out of bounds
-# Using a fixed reference avoids this by making integration a star
-# (every sample -> DMSO) instead of an all-pairs tree.
+# CCAIntegration (with and without an explicit reference) reproducibly
+# hit "Error in data.use1[anchors1, ] : subscript out of bounds" inside
+# Seurat's anchor-weighting step (FindIntegrationMatrix). This happens
+# when a pair of samples being merged shares fewer mutual-nearest-
+# neighbor anchors than k.weight. Given the biology here -- AZA
+# (a demethylating agent) and INCB059872 (an LSD1 inhibitor) are both
+# expected to cause large transcriptional shifts relative to DMSO --
+# at least one sample pair likely doesn't have enough shared anchors
+# for CCA, regardless of k.weight or reference choice.
+#
+# Harmony integrates directly on the PCA embedding with no anchor-
+# finding step, so it isn't subject to this failure mode and is a
+# standard, robust choice for designs with strong expected treatment
+# effects across many samples.
 
-reference_samples <- c("DMSO_A", "DMSO_B")
-
-reference_idx <- which(sample_order %in% reference_samples)
-
-if (length(reference_idx) != length(reference_samples)) {
+if (!requireNamespace("harmony", quietly = TRUE)) {
   stop(
-    "Could not find all reference samples (",
-    paste(reference_samples, collapse = ", "),
-    ") in sample_order."
+    "Package 'harmony' is required for HarmonyIntegration but is not ",
+    "installed. Install it with install.packages('harmony')."
   )
 }
 
 cat(
-  "Running CCAIntegration across all 8 samples.\n"
+  "Running HarmonyIntegration across all 8 samples.\n"
 )
 
 cat(
-  "Reference samples: ",
-  paste(sample_order[reference_idx], collapse = ", "),
-  "\n",
-  sep = ""
-)
-
-cat(
-  "Reference layer indices: ",
-  paste(reference_idx, collapse = ", "),
-  "\n",
-  sep = ""
-)
-
-cat(
-  "Using dimensions 1:30.\n"
-)
-
-cat(
-  "Using k.weight = 50.\n\n"
+  "Using dimensions 1:30.\n\n"
 )
 
 object <- IntegrateLayers(
   object = object,
-  method = CCAIntegration,
+  method = HarmonyIntegration,
   orig.reduction = "pca",
-  new.reduction = "integrated.cca",
+  new.reduction = "integrated.harmony",
   dims = 1:30,
-  dims.to.integrate = 30,
-  reference = reference_idx,
-  k.weight = 50,
   verbose = FALSE
 )
 
 cat("\n")
-cat("CCA integration completed successfully.\n")
+cat("Harmony integration completed successfully.\n")
 
 # ------------------------------------------------------------
 # CHECK INTEGRATED REDUCTION
@@ -486,14 +471,14 @@ cat("============================================================\n")
 cat("CHECKING INTEGRATED REDUCTION\n")
 cat("============================================================\n\n")
 
-if (!"integrated.cca" %in% Reductions(object)) {
+if (!"integrated.harmony" %in% Reductions(object)) {
   stop(
-    "integrated.cca reduction was not created."
+    "integrated.harmony reduction was not created."
   )
 }
 
 integrated_embeddings <- Embeddings(
-  object[["integrated.cca"]]
+  object[["integrated.harmony"]]
 )
 
 cat(
@@ -507,7 +492,7 @@ cat(
 
 if (nrow(integrated_embeddings) != ncol(object)) {
   stop(
-    "Number of cells in integrated.cca does not match Seurat object."
+    "Number of cells in integrated.harmony does not match Seurat object."
   )
 }
 
@@ -524,7 +509,7 @@ cat("============================================================\n\n")
 
 object <- FindNeighbors(
   object,
-  reduction = "integrated.cca",
+  reduction = "integrated.harmony",
   dims = 1:30,
   verbose = FALSE
 )
@@ -541,13 +526,13 @@ cat("============================================================\n\n")
 object <- FindClusters(
   object,
   resolution = 0.4,
-  cluster.name = "cluster.cca",
+  cluster.name = "cluster.harmony",
   verbose = FALSE
 )
 
 cat(
-  "Number of CCA clusters: ",
-  length(unique(object$cluster.cca)),
+  "Number of Harmony clusters: ",
+  length(unique(object$cluster.harmony)),
   "\n",
   sep = ""
 )
@@ -563,7 +548,7 @@ cat("============================================================\n\n")
 
 object <- RunUMAP(
   object,
-  reduction = "integrated.cca",
+  reduction = "integrated.harmony",
   dims = 1:30,
   reduction.name = "umap.integrated",
   reduction.key = "integratedUMAP_",
@@ -592,10 +577,10 @@ ggsave(
 p_integrated_cluster <- DimPlot(
   object,
   reduction = "umap.integrated",
-  group.by = "cluster.cca",
+  group.by = "cluster.harmony",
   label = TRUE
 ) +
-  ggtitle("Integrated UMAP - CCA clusters")
+  ggtitle("Integrated UMAP - Harmony clusters")
 
 ggsave(
   filename = file.path(
