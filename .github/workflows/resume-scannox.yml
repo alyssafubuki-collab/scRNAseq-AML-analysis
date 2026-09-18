@@ -627,130 +627,71 @@ jobs:
             )
           '
 
+# ============================================================
+# 18. INSTALL scSorter FROM R-UNIVERSE (RECOMMANDÉ)
+# ============================================================
 
-      # ============================================================
-      # 18. INSTALL scSorter FROM CRAN ARCHIVE
-      # IMPORTANT: NEVER USE install.packages("scSorter")
-      # ============================================================
-
-      - name: Install scSorter 0.0.2 from CRAN Archive
+      - name: Install scSorter 0.0.2 from r-universe
         shell: bash
         run: |
           set -euo pipefail
 
           echo "============================================================"
-          echo "INSTALLING scSorter 0.0.2"
+          echo "INSTALLING scSorter 0.0.2 FROM R-UNIVERSE"
           echo "============================================================"
 
-          SC_SORTER_VERSION="0.0.2"
-          SC_SORTER_FILE="scSorter_${SC_SORTER_VERSION}.tar.gz"
-          SC_SORTER_URL="https://cran.r-project.org/src/contrib/Archive/scSorter/${SC_SORTER_FILE}"
+          Rscript -e '
+            options(
+              repos = c(
+                "https://jli-stat.r-universe.dev",
+                "https://packagemanager.posit.co/cran/latest"
+               )
+           )
 
-          echo ""
-          echo "Checking whether scSorter is already installed..."
+           required_version <- "0.0.2"
 
-          if Rscript -e '
-            ip <- installed.packages()
+           if (
+              !requireNamespace("scSorter", quietly = TRUE) ||
+              as.character(packageVersion("scSorter")) != required_version
+              ) {
 
-            ok <- "scSorter" %in% rownames(ip) &&
-                  as.character(
-                    packageVersion("scSorter")
-                  ) == "0.0.2"
+             if (requireNamespace("scSorter", quietly = TRUE)) {
+              remove.packages("scSorter")
+          }
 
-            quit(
-              status = if (ok) 0 else 1
-            )
-          '
-          then
-            echo "scSorter 0.0.2 is already installed."
-          else
-
-            echo ""
-            echo "scSorter is not installed."
-            echo "Installing archived scSorter 0.0.2..."
-            echo ""
-            echo "Downloading:"
-            echo "${SC_SORTER_URL}"
-
-            curl \
-              --fail \
-              --location \
-              --retry 5 \
-              --retry-delay 5 \
-              --retry-connrefused \
-              --output "/tmp/${SC_SORTER_FILE}" \
-              "${SC_SORTER_URL}"
-
-            echo ""
-            echo "Downloaded archive:"
-            ls -lh "/tmp/${SC_SORTER_FILE}"
-
-            echo ""
-            echo "Checking archive integrity..."
-
-            tar -tzf \
-              "/tmp/${SC_SORTER_FILE}" \
-              > /dev/null
-
-            echo "Archive integrity OK."
-
-            echo ""
-            echo "Installing scSorter..."
-
-            R CMD INSTALL \
-              --no-multiarch \
-              --with-keep.source \
-              "/tmp/${SC_SORTER_FILE}"
-
-            echo ""
-            echo "Verifying scSorter installation..."
-
-            Rscript -e '
-              if (!"scSorter" %in% rownames(installed.packages())) {
-                stop("scSorter installation failed.")
-              }
-
-              version <- as.character(
-                packageVersion("scSorter")
-              )
-
-              cat(
-                "Installed scSorter version:",
-                version,
-                "\n"
-              )
-
-              if (version != "0.0.2") {
-                stop(
-                  paste(
-                    "Unexpected scSorter version:",
-                    version
-                  )
+             install.packages(
+                "scSorter",
+                dependencies = TRUE
                 )
-              }
+            }
 
-              library(scSorter)
+          version <- as.character(packageVersion("scSorter"))
 
-              cat(
-                "scSorter loaded successfully.\n"
-              )
-            '
+          cat(
+          "Installed scSorter version:",
+          version,
+          "\n"
+          )
 
-          fi
+          if (version != required_version) {
+          stop(
+          paste(
+            "Unexpected scSorter version:",
+            version,
+            "- expected 0.0.2"
+          )
+          )
+          }
+
+          library(scSorter)
+          cat("scSorter loaded successfully.\n")
+          '
 
           echo ""
           echo "============================================================"
           echo "scSorter CHECK COMPLETE"
           echo "============================================================"
-
-          Rscript -e '
-            cat(
-              "scSorter:",
-              as.character(packageVersion("scSorter")),
-              "\n"
-            )
-          '
-
+    
 
       # ============================================================
       # 19. scCATCH
