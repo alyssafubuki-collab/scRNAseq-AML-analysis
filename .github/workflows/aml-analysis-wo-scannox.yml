@@ -7,7 +7,7 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
 
@@ -286,7 +286,7 @@ jobs:
       # ==========================================================
       # 14. SEURAT v5 CCA INTEGRATION
       # ==========================================================
-      
+
       - name: Runner resources before Seurat integration
         run: |
             echo "===== CPU ====="
@@ -297,7 +297,7 @@ jobs:
 
             echo "===== DISK ====="
                 df -h
-    
+
       - name: Seurat v5 CCA integration
         run: |
           set -euo pipefail
@@ -410,7 +410,33 @@ jobs:
           find figures -type f | sort || true
 
       # ==========================================================
-      # 22. UPLOAD RESULTS
+      # 22. COMMIT RESULTS BACK TO THE REPOSITORY
+      # ==========================================================
+      # In addition to the artifact upload below, push results/,
+      # figures/, and environment/ straight into the repo so they're
+      # browsable on GitHub without downloading anything. `[skip ci]`
+      # in the commit message stops this push from re-triggering the
+      # workflow (which is set to run `on: push` to main) -- without
+      # it this step would trigger an infinite loop of runs.
+
+      - name: Commit results to repository
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -f results/ figures/ environment/
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update pipeline results [skip ci]"
+            git push
+          fi
+
+      # ==========================================================
+      # 23. UPLOAD RESULTS ARTIFACT
       # ==========================================================
 
       - name: Upload analysis results
