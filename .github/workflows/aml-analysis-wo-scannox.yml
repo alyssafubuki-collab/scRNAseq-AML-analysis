@@ -125,10 +125,10 @@ jobs:
 
           mkdir -p \
             data/GSE145410 \
-            figures/qc \
-            figures/integration \
-            figures/annotation \
-            figures/differential_expression \
+            results/figures/qc \
+            results/figures/integration \
+            results/figures/annotation \
+            results/figures/differential_expression \
             results/qc \
             results/annotation \
             results/differential_expression \
@@ -425,7 +425,6 @@ jobs:
           results/annotation/*.csv \
           results/differential_expression/*.csv \
           results/figures/*.png \
-          figures/ \
           environment/
 
           if git diff --cached --quiet; then
@@ -459,7 +458,6 @@ jobs:
           name: AML-scRNAseq-analysis-results
           path: |
             results/
-            figures/
             environment/
           if-no-files-found: warn
           retention-days: 30
