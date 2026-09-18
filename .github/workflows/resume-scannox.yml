@@ -369,6 +369,23 @@ jobs:
 
       # ============================================================
       # 8. C++14
+      #
+      # NOTE: this writes a GLOBAL ~/.R/Makevars that forces every
+      # subsequent package build in this job to use -std=gnu++14.
+      # This is needed for several old CRAN-archive packages
+      # installed later (Harmony 1.2.4, scSorter 0.0.2, SCINA 1.2.0,
+      # scibetR) which predate modern C++ standards. It is NOT needed
+      # -- and actively breaks -- modern packages such as tzdb (a
+      # transitive dependency of caret via recipes/hardhat/clock),
+      # which requires C++17 and relies on its own package-level
+      # Makevars to add an include path for its vendored date/tz.h
+      # headers. A global PKG_CXXFLAGS override clobbers that
+      # package-level Makevars, so the compiler can no longer find
+      # its own bundled headers.
+      #
+      # Fix: this Makevars is disabled immediately before the
+      # caret/tzdb install step below, and restored immediately
+      # after, so it only applies to the old packages that need it.
       # ============================================================
 
       - name: Configure C++14
@@ -483,14 +500,33 @@ jobs:
 
 
       # ============================================================
+      # 9.b DISABLE GLOBAL C++14 OVERRIDE FOR CARET / TZDB
+      #
+      # tzdb (pulled in by caret -> recipes -> hardhat -> clock)
+      # requires C++17 and needs its own package Makevars intact to
+      # find its vendored date/tz.h headers. Move the global
+      # override out of the way for this one step.
+      # ============================================================
+
+      - name: Disable global C++14 override before caret/tzdb
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -f "${HOME}/.R/Makevars" ]; then
+            mv "${HOME}/.R/Makevars" "${HOME}/.R/Makevars.disabled"
+            echo "Global ~/.R/Makevars disabled for this step."
+          else
+            echo "No global ~/.R/Makevars present; nothing to disable."
+          fi
+
+
+      # ============================================================
       # 10. CARET
       # ============================================================
 
       - name: Install caret dependencies and caret
         shell: bash
-        env:
-          CXXFLAGS: "-std=gnu++14"
-          PKG_CXXFLAGS: "-std=gnu++14"
         run: |
           set -euo pipefail
 
@@ -508,11 +544,6 @@ jobs:
               CRAN = rspm
             ),
             Ncpus = 2
-          )
-
-          Sys.setenv(
-            CXXFLAGS = "-std=gnu++14",
-            PKG_CXXFLAGS = "-std=gnu++14"
           )
 
           cat("Using CRAN repository: ", getOption("repos")["CRAN"], "\n", sep = "")
@@ -568,6 +599,28 @@ jobs:
 
           cat("\nAll caret dependencies installed successfully.\n")
           EOF
+
+
+      # ============================================================
+      # 10.b RESTORE GLOBAL C++14 OVERRIDE
+      #
+      # Re-enable it for the remaining old CRAN-archive packages
+      # below that rely on it (Harmony 1.2.4, scSorter 0.0.2,
+      # SCINA 1.2.0, scibetR).
+      # ============================================================
+
+      - name: Restore global C++14 override after caret/tzdb
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -f "${HOME}/.R/Makevars.disabled" ]; then
+            mv "${HOME}/.R/Makevars.disabled" "${HOME}/.R/Makevars"
+            echo "Global ~/.R/Makevars restored."
+          else
+            echo "No disabled Makevars found to restore."
+          fi
+
           
       # ============================================================
       # 11. scPred DEPENDENCIES
