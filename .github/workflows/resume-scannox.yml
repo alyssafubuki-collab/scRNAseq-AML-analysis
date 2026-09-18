@@ -36,6 +36,7 @@ jobs:
       # ============================================================
       # 3. SYSTEM DEPENDENCIES
       # ============================================================
+
       - name: Install system dependencies
         shell: bash
         run: |
@@ -67,7 +68,8 @@ jobs:
             liblapack-dev \
             libblas-dev \
             libuv1-dev
-            
+
+
       # ============================================================
       # 4. R CONFIGURATION
       # ============================================================
@@ -124,6 +126,7 @@ jobs:
           )
           EOF
 
+
       # ============================================================
       # 6. CORE CRAN PACKAGES
       # ============================================================
@@ -164,6 +167,7 @@ jobs:
           )
 
           if (length(missing) > 0) {
+
             cat("Installing core packages:\n")
             print(missing)
 
@@ -315,6 +319,8 @@ jobs:
             sep = ""
           )
           EOF
+
+
       # ============================================================
       # 7. BIOCONDUCTOR
       # ============================================================
@@ -330,6 +336,10 @@ jobs:
               CRAN = "https://cloud.r-project.org"
             )
           )
+
+          if (!requireNamespace("BiocManager", quietly = TRUE)) {
+            stop("BiocManager is not available.")
+          }
 
           BiocManager::install(
             c(
@@ -369,23 +379,6 @@ jobs:
 
       # ============================================================
       # 8. C++14
-      #
-      # NOTE: this writes a GLOBAL ~/.R/Makevars that forces every
-      # subsequent package build in this job to use -std=gnu++14.
-      # This is needed for several old CRAN-archive packages
-      # installed later (Harmony 1.2.4, scSorter 0.0.2, SCINA 1.2.0,
-      # scibetR) which predate modern C++ standards. It is NOT needed
-      # -- and actively breaks -- modern packages such as tzdb (a
-      # transitive dependency of caret via recipes/hardhat/clock),
-      # which requires C++17 and relies on its own package-level
-      # Makevars to add an include path for its vendored date/tz.h
-      # headers. A global PKG_CXXFLAGS override clobbers that
-      # package-level Makevars, so the compiler can no longer find
-      # its own bundled headers.
-      #
-      # Fix: this Makevars is disabled immediately before the
-      # caret/tzdb install step below, and restored immediately
-      # after, so it only applies to the old packages that need it.
       # ============================================================
 
       - name: Configure C++14
@@ -471,6 +464,7 @@ jobs:
           )
 
           if (length(missing) > 0) {
+
             install.packages(
               missing,
               dependencies = c(
@@ -501,11 +495,6 @@ jobs:
 
       # ============================================================
       # 9.b DISABLE GLOBAL C++14 OVERRIDE FOR CARET / TZDB
-      #
-      # tzdb (pulled in by caret -> recipes -> hardhat -> clock)
-      # requires C++17 and needs its own package Makevars intact to
-      # find its vendored date/tz.h headers. Move the global
-      # override out of the way for this one step.
       # ============================================================
 
       - name: Disable global C++14 override before caret/tzdb
@@ -514,10 +503,13 @@ jobs:
           set -euo pipefail
 
           if [ -f "${HOME}/.R/Makevars" ]; then
-            mv "${HOME}/.R/Makevars" "${HOME}/.R/Makevars.disabled"
+            mv \
+              "${HOME}/.R/Makevars" \
+              "${HOME}/.R/Makevars.disabled"
+
             echo "Global ~/.R/Makevars disabled for this step."
           else
-            echo "No global ~/.R/Makevars present; nothing to disable."
+            echo "No global ~/.R/Makevars present."
           fi
 
 
@@ -531,11 +523,12 @@ jobs:
           set -euo pipefail
 
           Rscript - <<'EOF'
+
           rspm <- Sys.getenv("RSPM")
 
           if (!nzchar(rspm)) {
             stop(
-              "RSPM is not configured. setup-r must provide RSPM before installing caret dependencies."
+              "RSPM is not configured. setup-r must provide RSPM."
             )
           }
 
@@ -546,8 +539,19 @@ jobs:
             Ncpus = 2
           )
 
-          cat("Using CRAN repository: ", getOption("repos")["CRAN"], "\n", sep = "")
-          cat("RSPM: ", rspm, "\n", sep = "")
+          cat(
+            "Using CRAN repository: ",
+            getOption("repos")["CRAN"],
+            "\n",
+            sep = ""
+          )
+
+          cat(
+            "RSPM: ",
+            rspm,
+            "\n",
+            sep = ""
+          )
 
           packages <- c(
             "tzdb",
@@ -597,16 +601,15 @@ jobs:
             )
           }
 
-          cat("\nAll caret dependencies installed successfully.\n")
+          cat(
+            "\nAll caret dependencies installed successfully.\n"
+          )
+
           EOF
 
 
       # ============================================================
       # 10.b RESTORE GLOBAL C++14 OVERRIDE
-      #
-      # Re-enable it for the remaining old CRAN-archive packages
-      # below that rely on it (Harmony 1.2.4, scSorter 0.0.2,
-      # SCINA 1.2.0, scibetR).
       # ============================================================
 
       - name: Restore global C++14 override after caret/tzdb
@@ -615,13 +618,20 @@ jobs:
           set -euo pipefail
 
           if [ -f "${HOME}/.R/Makevars.disabled" ]; then
-            mv "${HOME}/.R/Makevars.disabled" "${HOME}/.R/Makevars"
+
+            mv \
+              "${HOME}/.R/Makevars.disabled" \
+              "${HOME}/.R/Makevars"
+
             echo "Global ~/.R/Makevars restored."
+
           else
+
             echo "No disabled Makevars found to restore."
+
           fi
 
-          
+
       # ============================================================
       # 11. scPred DEPENDENCIES
       # ============================================================
@@ -632,6 +642,7 @@ jobs:
           set -euo pipefail
 
           Rscript - <<'EOF'
+
           options(
             repos = c(
               CRAN = "https://cloud.r-project.org"
@@ -653,6 +664,7 @@ jobs:
           )
 
           if (length(missing) > 0) {
+
             install.packages(
               missing,
               dependencies = c(
@@ -678,6 +690,7 @@ jobs:
           }
 
           cat("All scPred dependencies installed.\n")
+
           EOF
 
 
@@ -701,9 +714,11 @@ jobs:
             quit(status = 1)
           '
           then
+
             echo "HarmonyMatrix already available."
 
           else
+
             echo "Installing Harmony 1.2.4..."
 
             curl \
@@ -718,9 +733,11 @@ jobs:
               --no-multiarch \
               --with-keep.source \
               harmony_1.2.4.tar.gz
+
           fi
 
           Rscript - <<'EOF'
+
           if (!requireNamespace("harmony", quietly = TRUE)) {
             stop("Harmony installation failed.")
           }
@@ -735,6 +752,7 @@ jobs:
             " ready.\n",
             sep = ""
           )
+
           EOF
 
 
@@ -753,6 +771,7 @@ jobs:
           echo "Checking scPred dependencies..."
 
           Rscript - <<'EOF'
+
           required <- c(
             "caret",
             "harmony",
@@ -775,6 +794,7 @@ jobs:
             print(failed)
             stop("scPred dependencies are missing.")
           }
+
           EOF
 
           curl \
@@ -791,6 +811,7 @@ jobs:
             scPred.tar.gz
 
           Rscript - <<'EOF'
+
           if (!requireNamespace("scPred", quietly = TRUE)) {
             stop("scPred installation failed.")
           }
@@ -801,14 +822,18 @@ jobs:
             " installed successfully.\n",
             sep = ""
           )
+
           EOF
 
 
       # ============================================================
       # 14. scSorter 0.0.2
       #
-      # IMPORTANT :
-      # scSorter n'est JAMAIS installé avec install.packages().
+      # IMPORTANT:
+      # scSorter is archived on CRAN.
+      # NEVER use install.packages("scSorter").
+      #
+      # Install directly from the CRAN archive.
       # ============================================================
 
       - name: Install scSorter 0.0.2
@@ -820,70 +845,135 @@ jobs:
           echo "INSTALLING scSorter 0.0.2"
           echo "============================================================"
 
-          SC_SORTER_URL="https://cran.r-project.org/src/contrib/Archive/scSorter/scSorter_0.0.2.tar.gz"
-          SC_SORTER_FILE="scSorter_0.0.2.tar.gz"
+          SC_SORTER_VERSION="0.0.2"
+          SC_SORTER_FILE="scSorter_${SC_SORTER_VERSION}.tar.gz"
+          SC_SORTER_URL="https://cran.r-project.org/src/contrib/Archive/scSorter/${SC_SORTER_FILE}"
 
-          if Rscript - <<'EOF'
-          if (requireNamespace("scSorter", quietly = TRUE)) {
-            cat(
-              "scSorter already installed: ",
-              as.character(packageVersion("scSorter")),
-              "\n",
-              sep = ""
+          echo ""
+          echo "Checking whether scSorter is already installed..."
+
+          if Rscript -e '
+            ip <- installed.packages()
+
+            ok <- "scSorter" %in% rownames(ip)
+
+            if (ok) {
+
+              v <- ip["scSorter", "Version"]
+
+              cat(
+                "scSorter already installed: ",
+                v,
+                "\n",
+                sep = ""
+              )
+            }
+
+            quit(
+              status = if (ok) 0 else 1
             )
-            quit(status = 0)
-          }
-
-          quit(status = 1)
-          EOF
+          '
           then
+
             echo "scSorter already available."
 
           else
-            echo "Downloading scSorter 0.0.2 from CRAN archive..."
+
+            echo ""
+            echo "scSorter is not installed."
+            echo "Installing archived scSorter ${SC_SORTER_VERSION}..."
+
+            rm -f "${SC_SORTER_FILE}"
+
+            echo ""
+            echo "Downloading:"
+            echo "${SC_SORTER_URL}"
 
             curl \
-              -L \
               --fail \
+              --location \
               --retry 10 \
               --retry-delay 3 \
+              --retry-connrefused \
+              --connect-timeout 30 \
+              --max-time 120 \
               "${SC_SORTER_URL}" \
-              -o "${SC_SORTER_FILE}"
+              --output "${SC_SORTER_FILE}"
 
-            echo "Downloaded:"
+            echo ""
+            echo "Downloaded archive:"
             ls -lh "${SC_SORTER_FILE}"
 
-            echo "File type:"
+            echo ""
+            echo "Checking archive type:"
             file "${SC_SORTER_FILE}"
 
-            echo "Installing with R CMD INSTALL..."
+            echo ""
+            echo "Checking archive integrity..."
+
+            tar \
+              -tzf "${SC_SORTER_FILE}" \
+              >/dev/null
+
+            echo "Archive OK."
+
+            echo ""
+            echo "Installing scSorter with R CMD INSTALL..."
 
             R CMD INSTALL \
               --no-multiarch \
               --with-keep.source \
               "${SC_SORTER_FILE}"
+
           fi
 
-          echo "Verifying scSorter..."
+          echo ""
+          echo "============================================================"
+          echo "VERIFYING scSorter"
+          echo "============================================================"
 
           Rscript - <<'EOF'
-          if (!requireNamespace("scSorter", quietly = TRUE)) {
-            stop("scSorter installation failed.")
+
+          ip <- installed.packages()
+
+          if (!"scSorter" %in% rownames(ip)) {
+            stop(
+              "scSorter is NOT installed."
+            )
           }
 
-          cat(
-            "scSorter ",
-            as.character(packageVersion("scSorter")),
-            " installed successfully.\n",
-            sep = ""
-          )
+          version <- ip["scSorter", "Version"]
 
           cat(
-            "Location: ",
-            find.package("scSorter"),
+            "Installed scSorter version: ",
+            version,
             "\n",
             sep = ""
           )
+
+          if (version != "0.0.2") {
+            stop(
+              paste0(
+                "Wrong scSorter version: ",
+                version,
+                ". Expected 0.0.2."
+              )
+            )
+          }
+
+          package_path <- find.package("scSorter")
+
+          cat(
+            "Location: ",
+            package_path,
+            "\n",
+            sep = ""
+          )
+
+          cat(
+            "\nscSorter 0.0.2 successfully installed.\n"
+          )
+
           EOF
 
 
@@ -897,6 +987,7 @@ jobs:
           set -euo pipefail
 
           Rscript - <<'EOF'
+
           options(
             repos = c(
               CRAN = "https://cloud.r-project.org"
@@ -904,6 +995,7 @@ jobs:
           )
 
           if (!requireNamespace("scCATCH", quietly = TRUE)) {
+
             install.packages(
               "scCATCH",
               dependencies = c(
@@ -924,6 +1016,7 @@ jobs:
             " ready.\n",
             sep = ""
           )
+
           EOF
 
 
@@ -937,7 +1030,9 @@ jobs:
           set -euo pipefail
 
           Rscript - <<'EOF'
+
           if (!requireNamespace("scmap", quietly = TRUE)) {
+
             BiocManager::install(
               "scmap",
               ask = FALSE,
@@ -955,6 +1050,7 @@ jobs:
             " ready.\n",
             sep = ""
           )
+
           EOF
 
 
@@ -974,12 +1070,14 @@ jobs:
           echo "Installing CelliD..."
 
           Rscript - <<'EOF'
+
           Sys.setenv(
             CXXFLAGS = "-std=gnu++14",
             PKG_CXXFLAGS = "-std=gnu++14"
           )
 
           if (!requireNamespace("CelliD", quietly = TRUE)) {
+
             BiocManager::install(
               "CelliD",
               ask = FALSE,
@@ -998,6 +1096,7 @@ jobs:
             " installed successfully.\n",
             sep = ""
           )
+
           EOF
 
 
@@ -1011,7 +1110,9 @@ jobs:
           set -euo pipefail
 
           Rscript - <<'EOF'
+
           if (!requireNamespace("CHETAH", quietly = TRUE)) {
+
             BiocManager::install(
               "CHETAH",
               ask = FALSE,
@@ -1029,6 +1130,7 @@ jobs:
             " ready.\n",
             sep = ""
           )
+
           EOF
 
 
@@ -1050,9 +1152,13 @@ jobs:
           quit(status = 1)
           EOF
           then
+
             echo "SCINA already available."
 
           else
+
+            echo "Downloading SCINA 1.2.0..."
+
             curl \
               -L \
               --fail \
@@ -1061,13 +1167,17 @@ jobs:
               "https://cran.r-project.org/src/contrib/Archive/SCINA/SCINA_1.2.0.tar.gz" \
               -o SCINA_1.2.0.tar.gz
 
+            echo "Installing SCINA 1.2.0..."
+
             R CMD INSTALL \
               --no-multiarch \
               --with-keep.source \
               SCINA_1.2.0.tar.gz
+
           fi
 
           Rscript - <<'EOF'
+
           if (!requireNamespace("SCINA", quietly = TRUE)) {
             stop("SCINA installation failed.")
           }
@@ -1078,6 +1188,7 @@ jobs:
             " ready.\n",
             sep = ""
           )
+
           EOF
 
 
@@ -1099,9 +1210,13 @@ jobs:
           quit(status = 1)
           EOF
           then
+
             echo "scibetR already available."
 
           else
+
+            echo "Downloading scibetR..."
+
             curl \
               -L \
               --fail \
@@ -1110,13 +1225,17 @@ jobs:
               "https://github.com/zwj-tina/scibetR/archive/refs/heads/master.tar.gz" \
               -o scibetR.tar.gz
 
+            echo "Installing scibetR..."
+
             R CMD INSTALL \
               --no-multiarch \
               --with-keep.source \
               scibetR.tar.gz
+
           fi
 
           Rscript - <<'EOF'
+
           if (!requireNamespace("scibetR", quietly = TRUE)) {
             stop("scibetR installation failed.")
           }
@@ -1127,6 +1246,7 @@ jobs:
             " ready.\n",
             sep = ""
           )
+
           EOF
 
 
@@ -1140,6 +1260,7 @@ jobs:
           set -euo pipefail
 
           Rscript - <<'EOF'
+
           required <- c(
             "Seurat",
             "SeuratObject",
@@ -1167,12 +1288,19 @@ jobs:
           ]
 
           if (length(failed) > 0) {
+
             cat("Missing packages:\n")
             print(failed)
-            stop("scAnnoX dependencies are incomplete.")
+
+            stop(
+              "scAnnoX dependencies are incomplete."
+            )
           }
 
-          cat("All scAnnoX dependencies are available.\n")
+          cat(
+            "All scAnnoX dependencies are available.\n"
+          )
+
           EOF
 
 
@@ -1188,7 +1316,10 @@ jobs:
           SCANNOX_PATH="files/external/scAnnoX"
 
           if [ ! -f "${SCANNOX_PATH}/DESCRIPTION" ]; then
-            echo "ERROR: ${SCANNOX_PATH}/DESCRIPTION does not exist."
+
+            echo \
+              "ERROR: ${SCANNOX_PATH}/DESCRIPTION does not exist."
+
             exit 1
           fi
 
@@ -1197,7 +1328,9 @@ jobs:
 
           echo ""
           echo "DESCRIPTION:"
-          cat "${SCANNOX_PATH}/DESCRIPTION"
+
+          cat \
+            "${SCANNOX_PATH}/DESCRIPTION"
 
 
       # ============================================================
@@ -1217,6 +1350,7 @@ jobs:
             files/external/scAnnoX
 
           Rscript - <<'EOF'
+
           if (!requireNamespace("scAnnoX", quietly = TRUE)) {
             stop("scAnnoX installation failed.")
           }
@@ -1234,6 +1368,7 @@ jobs:
             "\n",
             sep = ""
           )
+
           EOF
 
 
@@ -1247,6 +1382,7 @@ jobs:
           set -euo pipefail
 
           Rscript - <<'EOF'
+
           library(scAnnoX)
 
           expected <- c(
@@ -1270,33 +1406,49 @@ jobs:
             !vapply(
               expected,
               function(x) {
+
                 exists(
                   x,
                   where = asNamespace("scAnnoX"),
                   inherits = FALSE
                 )
+
               },
               logical(1)
             )
           ]
 
           if (length(failed) > 0) {
-            cat("Missing scAnnoX functions:\n")
+
+            cat(
+              "Missing scAnnoX functions:\n"
+            )
+
             print(failed)
-            stop("scAnnoX function verification failed.")
+
+            stop(
+              "scAnnoX function verification failed."
+            )
           }
 
-          cat("All expected scAnnoX functions are available.\n")
+          cat(
+            "All expected scAnnoX functions are available.\n"
+          )
 
-          cat("\nAvailable annotation methods:\n")
-          print(listToolMethods())
+          cat(
+            "\nAvailable annotation methods:\n"
+          )
+
+          print(
+            listToolMethods()
+          )
+
           EOF
 
 
       # ============================================================
       # 25. CHECK EXISTING INTEGRATED OBJECT
       #
-      # IMPORTANT:
       # Scripts 01-07 are NOT executed.
       # ============================================================
 
@@ -1308,7 +1460,9 @@ jobs:
           OBJECT="results/objects/05_integrated.rds"
 
           if [ ! -f "${OBJECT}" ]; then
-            echo "ERROR: ${OBJECT} not found."
+
+            echo \
+              "ERROR: ${OBJECT} not found."
 
             echo ""
             echo "Available RDS files:"
@@ -1327,9 +1481,12 @@ jobs:
           fi
 
           echo "Object found:"
-          ls -lh "${OBJECT}"
+
+          ls -lh \
+            "${OBJECT}"
 
           Rscript - <<'EOF'
+
           library(Seurat)
 
           obj <- readRDS(
@@ -1337,22 +1494,49 @@ jobs:
           )
 
           if (!inherits(obj, "Seurat")) {
+
             stop(
               "05_integrated.rds is not a Seurat object."
             )
           }
 
-          cat("Class: ", class(obj)[1], "\n", sep = "")
-          cat("Cells: ", ncol(obj), "\n", sep = "")
-          cat("Features: ", nrow(obj), "\n", sep = "")
+          cat(
+            "Class: ",
+            class(obj)[1],
+            "\n",
+            sep = ""
+          )
+
+          cat(
+            "Cells: ",
+            ncol(obj),
+            "\n",
+            sep = ""
+          )
+
+          cat(
+            "Features: ",
+            nrow(obj),
+            "\n",
+            sep = ""
+          )
 
           cat("\nAssays:\n")
-          print(Assays(obj))
+
+          print(
+            Assays(obj)
+          )
 
           cat("\nReductions:\n")
-          print(Reductions(obj))
 
-          cat("\nIntegrated object is readable.\n")
+          print(
+            Reductions(obj)
+          )
+
+          cat(
+            "\nIntegrated object is readable.\n"
+          )
+
           EOF
 
 
@@ -1430,9 +1614,11 @@ jobs:
           echo "============================================================"
 
           if [ -d "results" ]; then
+
             find results \
               -type f \
               | sort
+
           fi
 
           echo ""
@@ -1441,9 +1627,11 @@ jobs:
           echo "============================================================"
 
           if [ -d "figures" ]; then
+
             find figures \
               -type f \
               | sort
+
           fi
 
           echo ""
@@ -1452,9 +1640,11 @@ jobs:
           echo "============================================================"
 
           if [ -d "docs" ]; then
+
             find docs \
               -type f \
               | sort
+
           fi
 
 
@@ -1493,13 +1683,16 @@ jobs:
             docs
 
           if git diff --cached --quiet; then
+
             echo "No generated changes to commit."
 
           else
+
             git commit \
               -m "Resume AML scAnnoX annotation and downstream analysis"
 
             git push
 
             echo "Results successfully pushed."
+
           fi
