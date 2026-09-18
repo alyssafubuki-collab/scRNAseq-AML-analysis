@@ -1,7 +1,6 @@
 # ============================================================
 # R
 # ============================================================
-
 .Rhistory
 .RData
 .Rproj.user/
@@ -10,53 +9,47 @@
 # ============================================================
 # macOS
 # ============================================================
-
 .DS_Store
 
 # ============================================================
-# Data
+# Raw / intermediate data (never tracked)
 # ============================================================
-
+data/*
+!data/.gitkeep
 data/raw/
 data/processed/
 
-*.rds
-*.RDS
-*.h5
-*.h5ad
-
-*.csv
-*.tsv
-*.txt
-
 # ============================================================
-# Generated results
+# Scratch / build artifacts, anywhere in the repo
 # ============================================================
-
-results/generated/
-
-# ============================================================
-# Temporary files
-# ============================================================
-
 *.tmp
 *.log
 *.cache
+*.tar.gz
+
+# ============================================================
+# Pipeline outputs: excluded by extension above would normally
+# also catch these, so explicitly re-include the folders we want
+# tracked in git regardless of file type (.rds, .csv, .txt, .png...).
+# Order matters: these negations must come after the exclusion
+# patterns above to win.
+# ============================================================
+!results/**
+!figures/**
+!environment/**
+
+# Optional scratch subfolder inside results/ that stays untracked
+# even though results/** is included above (declared after the
+# negation so it takes precedence for this one path).
+results/generated/
 
 # ============================================================
 # R Markdown
 # ============================================================
-
 *.html
 
-data/*
-!data/.gitkeep
-
-.Rhistory
-.RData
-.Rproj.user/
-
-*.tar.gz
-
+# ============================================================
+# renv
+# ============================================================
 renv/library/
 renv/staging/
