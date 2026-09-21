@@ -4,7 +4,6 @@
 # Consensus annotation:
 #   SingleR + scPred
 #
-# scAnnoX intentionally excluded.
 # ============================================================
 
 source("R/functions.R")
@@ -71,7 +70,7 @@ annotation_table$scPred[
 ] <- "unassigned"
 
 # ============================================================
-# AGREEMENT
+# AGREEMENT (global)
 # ============================================================
 
 valid <- (
@@ -106,6 +105,110 @@ write.csv(
     "pairwise_annotation_agreement.csv"
   ),
   row.names = FALSE
+)
+
+# ============================================================
+# COMPARAISON DETAILLEE : MATRICE DE CONFUSION
+#
+# Croisement complet SingleR x scPred (toutes cellules,
+# y compris "unassigned"), pour voir précisément où les
+# deux annotateurs sont d'accord ou en désaccord.
+# ============================================================
+
+confusion_matrix <- table(
+  SingleR = annotation_table$SingleR,
+  scPred  = annotation_table$scPred
+)
+
+confusion_df <- as.data.frame(confusion_matrix)
+
+write.csv(
+  confusion_df,
+  file.path(
+    project_dir,
+    "results",
+    "annotation",
+    "SingleR_vs_scPred_confusion_matrix.csv"
+  ),
+  row.names = FALSE
+)
+
+# Version "large" (matrice croisée classique, plus lisible)
+confusion_wide <- as.data.frame.matrix(confusion_matrix)
+
+write.csv(
+  confusion_wide,
+  file.path(
+    project_dir,
+    "results",
+    "annotation",
+    "SingleR_vs_scPred_confusion_matrix_wide.csv"
+  ),
+  row.names = TRUE
+)
+
+# ============================================================
+# COMPARAISON DETAILLEE : ACCORD PAR TYPE CELLULAIRE
+#
+# Pour chaque label SingleR (référence), quelle proportion
+# des cellules reçoit le même label par scPred ?
+# ============================================================
+
+agreement_by_celltype <- annotation_table %>%
+  filter(SingleR != "unassigned") %>%
+  group_by(SingleR) %>%
+  summarise(
+    n_cells = n(),
+    n_agree = sum(scPred == SingleR),
+    agreement_rate = n_agree / n_cells,
+    .groups = "drop"
+  ) %>%
+  arrange(desc(n_cells))
+
+write.csv(
+  agreement_by_celltype,
+  file.path(
+    project_dir,
+    "results",
+    "annotation",
+    "annotation_agreement_by_celltype.csv"
+  ),
+  row.names = FALSE
+)
+
+# ============================================================
+# COMPARAISON DETAILLEE : HEATMAP DE LA MATRICE DE CONFUSION
+# ============================================================
+
+p_confusion <- ggplot(
+  confusion_df,
+  aes(x = scPred, y = SingleR, fill = Freq)
+) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Freq), size = 3) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  labs(
+    title = "SingleR vs scPred - matrice de confusion",
+    x = "scPred",
+    y = "SingleR",
+    fill = "Cellules"
+  )
+
+ggsave(
+  file.path(
+    project_dir,
+    "figures",
+    "annotation",
+    "SingleR_vs_scPred_confusion_heatmap.png"
+  ),
+  p_confusion,
+  width = 10,
+  height = 8,
+  dpi = 300
 )
 
 # ============================================================
