@@ -16,7 +16,6 @@
 #   -> integrated clustering
 #
 # No SelectIntegrationFeatures()
-# No scAnnoX
 #
 # ------------------------------------------------------------
 # NOTE (see chat discussion): CCAIntegration reproducibly failed
