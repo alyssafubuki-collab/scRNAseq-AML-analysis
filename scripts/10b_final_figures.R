@@ -49,6 +49,7 @@ if ("umap.integrated" %in% Reductions(object)) {
   ggsave(
     file.path(
       project_dir,
+      "results",
       "figures",
       "integration",
       "FINAL_integrated_clusters.png"
@@ -82,6 +83,7 @@ if (
   ggsave(
     file.path(
       project_dir,
+      "results",
       "figures",
       "integration",
       "FINAL_integrated_treatment.png"
@@ -148,6 +150,7 @@ if (
   ggsave(
     file.path(
       project_dir,
+      "results",
       "figures",
       "annotation",
       "FINAL_annotation_comparison.png"
@@ -190,6 +193,7 @@ if (
   ggsave(
     file.path(
       project_dir,
+      "results",
       "figures",
       "qc",
       "FINAL_QC.png"
@@ -239,6 +243,7 @@ if (
   ggsave(
     file.path(
       project_dir,
+      "results",
       "figures",
       "annotation",
       "FINAL_consensus_cell_counts.png"
