@@ -13,7 +13,7 @@ This portfolio uses **GSE145410**, a public GEO dataset containing 8 10X Genomic
 
 The dataset is publicly available from NCBI GEO.
 
-The workflow downloads the public matrices automatically; no clinical or private CRCM data are included.
+The workflow automatically downloads the public matrices; it includes no clinical or private data.
 
 ## Analysis workflow
 
@@ -52,9 +52,6 @@ SingleR              scPred
    +---------+----------+
              |
              v
-          scAnnoX
-             |
-             v
    Annotation comparison
              |
              v
@@ -66,13 +63,10 @@ SingleR              scPred
 
 ## Annotation methods
 
-The annotation comparison is deliberately limited to the three approaches used in the research workflow represented by this portfolio:
+The annotation comparison is deliberately limited to the two approaches used in the research workflow represented by this portfolio:
 
 - **SingleR**
 - **scPred**
-- **scAnnoX**
-
-ACTINN is not part of this repository.
 
 ### Reference datasets
 
@@ -80,23 +74,7 @@ SingleR uses the hematopoietic **Novershtern** reference available through `cell
 
 scPred uses its public PBMC reference (`scPred::pbmc_1`) to train supervised classifiers.
 
-scAnnoX uses the same public scPred PBMC reference when the local Seurat-5-compatible scAnnoX package is available.
-
 Because these references do not contain every AML leukemic state, cells that do not match the reference populations may remain unassigned. This is preferable to forcing an inappropriate cell identity.
-
-## Important note about scAnnoX
-
-The original scAnnoX package was developed before the current Seurat v5 layer system. The original package is therefore **not silently substituted** here.
-
-The repository expects the Seurat-v5-compatible version of scAnnoX used in the original research workflow to be placed in:
-
-```text
-external/scAnnoX/
-```
-
-The script `08_annotation_scAnnoX.R` checks for this directory and stops with a clear message if it is absent.
-
-This keeps the portfolio reproducible and makes the Seurat-v5 compatibility modification explicit.
 
 ## Project structure
 
@@ -107,8 +85,6 @@ scRNAseq-AML-analysis/
 ├── .gitignore
 ├── data/
 │   └── README.md
-├── external/
-│   └── scAnnoX/
 ├── scripts/
 │   ├── 00_install_packages.R
 │   ├── 01_download_GSE145410.R
@@ -118,10 +94,9 @@ scRNAseq-AML-analysis/
 │   ├── 05_Seurat5_integration.R
 │   ├── 06_annotation_SingleR.R
 │   ├── 07_annotation_scPred.R
-│   ├── 08_annotation_scAnnoX.R
-│   ├── 09_compare_annotations.R
-│   ├── 10_differential_expression.R
-│   └── 11_final_figures.R
+│   ├── 08b_consensus_annotations.R
+│   ├── 09b_differential_expression.R
+│   └── 10b_final_figures.R
 ├── R/
 │   ├── functions.R
 │   └── plotting_functions.R
@@ -152,10 +127,9 @@ Run the scripts in this order:
 05_Seurat5_integration.R
 06_annotation_SingleR.R
 07_annotation_scPred.R
-08_annotation_scAnnoX.R
-09_compare_annotations.R
-10_differential_expression.R
-11_final_figures.R
+08b_consensus_annotations.R
+09b_differential_expression.R
+10b_final_figures.R
 ```
 
 ## Skills demonstrated
@@ -166,7 +140,6 @@ Run the scripts in this order:
 - scuttle
 - SingleR
 - scPred
-- scAnnoX
 - PCA
 - CCA integration
 - clustering
