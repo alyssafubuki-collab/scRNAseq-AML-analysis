@@ -253,6 +253,7 @@ if ("scpred" %in% Reductions(object)) {
   ggsave(
     file.path(
       project_dir,
+      "results",
       "figures",
       "annotation",
       "scPred_UMAP.png"
