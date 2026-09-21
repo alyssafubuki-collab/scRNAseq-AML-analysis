@@ -269,6 +269,7 @@ p_cluster <- DimPlot(
 ggsave(
   file.path(
     project_dir,
+    "results",
     "figures",
     "integration",
     "UMAP_unintegrated_clusters.png"
@@ -299,6 +300,7 @@ p_sample <- DimPlot(
 ggsave(
   file.path(
     project_dir,
+    "results",
     "figures",
     "integration",
     "UMAP_unintegrated_samples.png"
@@ -334,6 +336,7 @@ if (
   ggsave(
     file.path(
       project_dir,
+      "results",
       "figures",
       "integration",
       "UMAP_unintegrated_treatment.png"
