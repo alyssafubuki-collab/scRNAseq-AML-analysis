@@ -18,7 +18,7 @@
 # No SelectIntegrationFeatures()
 #
 # ------------------------------------------------------------
-# NOTE (see chat discussion): CCAIntegration reproducibly failed
+# NOTE : CCAIntegration reproducibly failed
 # with "Error in data.use1[anchors1, ] : subscript out of bounds"
 # inside Seurat's anchor-weighting step, both with the default
 # all-pairs merge tree and with an explicit DMSO reference. This
