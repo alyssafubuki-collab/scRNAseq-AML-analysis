@@ -9,7 +9,7 @@
 # scPredict performs its own Harmony-based alignment.
 #
 # ------------------------------------------------------------
-# NOTE (see chat discussion): scPred's project_query() internally
+# NOTE : scPred's project_query() internally
 # calls GetAssayData(new, "data"), passing "data" as the SECOND
 # POSITIONAL argument. scPred was written against an older
 # Seurat/SeuratObject API where that position was `slot`. In
