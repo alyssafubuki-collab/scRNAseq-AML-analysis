@@ -3,7 +3,6 @@
 # GitHub Actions package installation
 #
 # R 4.4.3
-# No scAnnoX
 # No GitHub PAT
 #
 # Harmony 1.2.4
