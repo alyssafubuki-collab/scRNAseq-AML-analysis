@@ -201,6 +201,7 @@ p_confusion <- ggplot(
 ggsave(
   file.path(
     project_dir,
+    "results",
     "figures",
     "annotation",
     "SingleR_vs_scPred_confusion_heatmap.png"
@@ -337,6 +338,7 @@ if ("umap.integrated" %in% Reductions(object)) {
   ggsave(
     file.path(
       project_dir,
+      "results",
       "figures",
       "annotation",
       "annotation_consensus_UMAP.png"
