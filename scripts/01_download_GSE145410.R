@@ -8,7 +8,6 @@
 # 8 public AML scRNA-seq samples
 #
 # No private data
-# No scAnnoX
 # ============================================================
 
 source("R/functions.R")
