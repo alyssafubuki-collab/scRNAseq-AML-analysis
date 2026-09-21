@@ -124,6 +124,7 @@ p <- LabelPoints(
 ggsave(
   file.path(
     project_dir,
+    "results",
     "figures",
     "qc",
     "highly_variable_genes.png"
