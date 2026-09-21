@@ -199,6 +199,7 @@ p_before <- VlnPlot(
 ggsave(
   file.path(
     project_dir,
+    "results",
     "figures",
     "qc",
     "QC_before_filtering.png"
@@ -353,6 +354,7 @@ p_after <- VlnPlot(
 ggsave(
   file.path(
     project_dir,
+    "results",
     "figures",
     "qc",
     "QC_after_filtering.png"
