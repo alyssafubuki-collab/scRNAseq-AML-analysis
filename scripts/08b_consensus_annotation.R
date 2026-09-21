@@ -108,11 +108,11 @@ write.csv(
 )
 
 # ============================================================
-# COMPARAISON DETAILLEE : MATRICE DE CONFUSION
+# DETAILED COMPARISON: CONFUSION MATRIX
 #
-# Croisement complet SingleR x scPred (toutes cellules,
-# y compris "unassigned"), pour voir précisément où les
-# deux annotateurs sont d'accord ou en désaccord.
+# Full cross-tabulation of SingleR x scPred (all cells,
+# including "unassigned"), to see precisely where the
+# two annotators agree or disagree.
 # ============================================================
 
 confusion_matrix <- table(
@@ -133,7 +133,7 @@ write.csv(
   row.names = FALSE
 )
 
-# Version "large" (matrice croisée classique, plus lisible)
+# "Wide" version (classic cross-tabulation, more readable)
 confusion_wide <- as.data.frame.matrix(confusion_matrix)
 
 write.csv(
@@ -148,10 +148,10 @@ write.csv(
 )
 
 # ============================================================
-# COMPARAISON DETAILLEE : ACCORD PAR TYPE CELLULAIRE
+# DETAILED COMPARISON: AGREEMENT BY CELL TYPE
 #
-# Pour chaque label SingleR (référence), quelle proportion
-# des cellules reçoit le même label par scPred ?
+# For each SingleR label (reference), what proportion
+# of cells receive the same label from scPred?
 # ============================================================
 
 agreement_by_celltype <- annotation_table %>%
@@ -177,7 +177,7 @@ write.csv(
 )
 
 # ============================================================
-# COMPARAISON DETAILLEE : HEATMAP DE LA MATRICE DE CONFUSION
+# DETAILED COMPARISON: CONFUSION MATRIX HEATMAP
 # ============================================================
 
 p_confusion <- ggplot(
