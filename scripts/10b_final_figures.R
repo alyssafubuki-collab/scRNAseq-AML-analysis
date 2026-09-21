@@ -3,7 +3,6 @@
 #
 # Final portfolio figures
 #
-# No scAnnoX.
 # ============================================================
 
 source("R/functions.R")
