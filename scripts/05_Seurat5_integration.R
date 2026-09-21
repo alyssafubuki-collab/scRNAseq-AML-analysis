@@ -76,7 +76,8 @@ output_file <- file.path(
 fig_dir <- file.path(
   project_dir,
   "results",
-  "figures"
+  "figures",
+  "integration"
 )
 
 dir.create(
