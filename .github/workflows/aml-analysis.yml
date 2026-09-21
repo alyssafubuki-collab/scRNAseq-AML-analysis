@@ -421,11 +421,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add -f \
-          results/qc/*.csv \
-          results/annotation/*.csv \
-          results/differential_expression/*.csv \
-          results/figures/*.png \
-          environment/
+            results/ \
+            environment/
 
           if git diff --cached --quiet; then
             echo "No changes to commit."
@@ -439,7 +436,6 @@ jobs:
           echo "============================================================"
 
           git fetch origin main
-
           git rebase origin/main
 
           echo "============================================================"
