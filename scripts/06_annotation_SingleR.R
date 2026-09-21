@@ -138,6 +138,7 @@ if ("umap.integrated" %in% Reductions(object)) {
   ggsave(
     file.path(
       project_dir,
+      "results",
       "figures",
       "annotation",
       "SingleR_UMAP.png"
