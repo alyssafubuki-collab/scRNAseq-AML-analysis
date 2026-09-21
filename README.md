@@ -39,7 +39,7 @@ Normalization + 2,000 HVGs
 PCA
    |
    v
-Seurat v5 CCA integration
+Seurat v5 integration
    |
    v
 Clustering + UMAP
@@ -141,7 +141,7 @@ Run the scripts in this order:
 - SingleR
 - scPred
 - PCA
-- CCA integration
+- Harmony integration
 - clustering
 - UMAP
 - differential expression
