@@ -412,7 +412,7 @@ jobs:
       # ==========================================================
       # 22. COMMIT RESULTS BACK TO THE REPOSITORY
       # ==========================================================
-
+      
       - name: Commit results to repository
         run: |
           set -euo pipefail
@@ -420,30 +420,27 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add -f \
-            results/ \
-            environment/
+          git add -A
 
           if git diff --cached --quiet; then
             echo "No changes to commit."
-            exit 0
+          else
+            git commit -m "Update pipeline results [skip ci]"
           fi
-
-          git commit -m "Update pipeline results [skip ci]"
 
           echo "============================================================"
           echo "SYNC WITH REMOTE MAIN"
           echo "============================================================"
 
           git fetch origin main
-          git rebase origin/main
+          git rebase --autostash origin/main
 
           echo "============================================================"
           echo "PUSH RESULTS"
           echo "============================================================"
 
           git push origin HEAD:main
-          
+
       # ==========================================================
       # 23. UPLOAD RESULTS ARTIFACT
       # ==========================================================
