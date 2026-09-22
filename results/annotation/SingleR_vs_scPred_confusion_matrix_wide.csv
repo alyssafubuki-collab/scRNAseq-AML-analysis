@@ -1,0 +1,16 @@
+"","B cell","CD4 T cell","CD8 T cell","cDC","cMono","ncMono","Plasma cell","unassigned"
+"B cells",0,0,0,0,1,0,5,1
+"CD4+ T cells",0,0,1,0,0,0,0,3
+"CD8+ T cells",0,1,0,0,0,0,0,0
+"CMPs",0,12,92,2076,783,5,0,8304
+"Dendritic cells",0,0,0,0,3,0,0,1
+"Erythroid cells",0,1,1,60,63,2,0,127
+"GMPs",0,0,0,0,1,0,0,9
+"Granulocytes",0,0,0,0,7,0,0,3
+"HSCs",1,6,29,2015,614,3,0,4134
+"Megakaryocytes",0,0,0,1,4,0,0,0
+"MEPs",0,3,41,2487,1280,4,0,6858
+"Monocytes",0,1,0,9,54,6,1,25
+"NK cells",0,0,0,0,1,0,0,0
+"NK T cells",0,0,0,0,0,0,0,1
+"unassigned",0,3,4,13,17,9,0,103

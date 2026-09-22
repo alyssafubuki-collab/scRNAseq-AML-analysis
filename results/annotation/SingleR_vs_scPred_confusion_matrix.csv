@@ -1,0 +1,121 @@
+"SingleR","scPred","Freq"
+"B cells","B cell",0
+"CD4+ T cells","B cell",0
+"CD8+ T cells","B cell",0
+"CMPs","B cell",0
+"Dendritic cells","B cell",0
+"Erythroid cells","B cell",0
+"GMPs","B cell",0
+"Granulocytes","B cell",0
+"HSCs","B cell",1
+"Megakaryocytes","B cell",0
+"MEPs","B cell",0
+"Monocytes","B cell",0
+"NK cells","B cell",0
+"NK T cells","B cell",0
+"unassigned","B cell",0
+"B cells","CD4 T cell",0
+"CD4+ T cells","CD4 T cell",0
+"CD8+ T cells","CD4 T cell",1
+"CMPs","CD4 T cell",12
+"Dendritic cells","CD4 T cell",0
+"Erythroid cells","CD4 T cell",1
+"GMPs","CD4 T cell",0
+"Granulocytes","CD4 T cell",0
+"HSCs","CD4 T cell",6
+"Megakaryocytes","CD4 T cell",0
+"MEPs","CD4 T cell",3
+"Monocytes","CD4 T cell",1
+"NK cells","CD4 T cell",0
+"NK T cells","CD4 T cell",0
+"unassigned","CD4 T cell",3
+"B cells","CD8 T cell",0
+"CD4+ T cells","CD8 T cell",1
+"CD8+ T cells","CD8 T cell",0
+"CMPs","CD8 T cell",92
+"Dendritic cells","CD8 T cell",0
+"Erythroid cells","CD8 T cell",1
+"GMPs","CD8 T cell",0
+"Granulocytes","CD8 T cell",0
+"HSCs","CD8 T cell",29
+"Megakaryocytes","CD8 T cell",0
+"MEPs","CD8 T cell",41
+"Monocytes","CD8 T cell",0
+"NK cells","CD8 T cell",0
+"NK T cells","CD8 T cell",0
+"unassigned","CD8 T cell",4
+"B cells","cDC",0
+"CD4+ T cells","cDC",0
+"CD8+ T cells","cDC",0
+"CMPs","cDC",2076
+"Dendritic cells","cDC",0
+"Erythroid cells","cDC",60
+"GMPs","cDC",0
+"Granulocytes","cDC",0
+"HSCs","cDC",2015
+"Megakaryocytes","cDC",1
+"MEPs","cDC",2487
+"Monocytes","cDC",9
+"NK cells","cDC",0
+"NK T cells","cDC",0
+"unassigned","cDC",13
+"B cells","cMono",1
+"CD4+ T cells","cMono",0
+"CD8+ T cells","cMono",0
+"CMPs","cMono",783
+"Dendritic cells","cMono",3
+"Erythroid cells","cMono",63
+"GMPs","cMono",1
+"Granulocytes","cMono",7
+"HSCs","cMono",614
+"Megakaryocytes","cMono",4
+"MEPs","cMono",1280
+"Monocytes","cMono",54
+"NK cells","cMono",1
+"NK T cells","cMono",0
+"unassigned","cMono",17
+"B cells","ncMono",0
+"CD4+ T cells","ncMono",0
+"CD8+ T cells","ncMono",0
+"CMPs","ncMono",5
+"Dendritic cells","ncMono",0
+"Erythroid cells","ncMono",2
+"GMPs","ncMono",0
+"Granulocytes","ncMono",0
+"HSCs","ncMono",3
+"Megakaryocytes","ncMono",0
+"MEPs","ncMono",4
+"Monocytes","ncMono",6
+"NK cells","ncMono",0
+"NK T cells","ncMono",0
+"unassigned","ncMono",9
+"B cells","Plasma cell",5
+"CD4+ T cells","Plasma cell",0
+"CD8+ T cells","Plasma cell",0
+"CMPs","Plasma cell",0
+"Dendritic cells","Plasma cell",0
+"Erythroid cells","Plasma cell",0
+"GMPs","Plasma cell",0
+"Granulocytes","Plasma cell",0
+"HSCs","Plasma cell",0
+"Megakaryocytes","Plasma cell",0
+"MEPs","Plasma cell",0
+"Monocytes","Plasma cell",1
+"NK cells","Plasma cell",0
+"NK T cells","Plasma cell",0
+"unassigned","Plasma cell",0
+"B cells","unassigned",1
+"CD4+ T cells","unassigned",3
+"CD8+ T cells","unassigned",0
+"CMPs","unassigned",8304
+"Dendritic cells","unassigned",1
+"Erythroid cells","unassigned",127
+"GMPs","unassigned",9
+"Granulocytes","unassigned",3
+"HSCs","unassigned",4134
+"Megakaryocytes","unassigned",0
+"MEPs","unassigned",6858
+"Monocytes","unassigned",25
+"NK cells","unassigned",0
+"NK T cells","unassigned",1
+"unassigned","unassigned",103
